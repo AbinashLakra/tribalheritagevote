@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import {
   ADMIN_COOKIE_NAME,
-  verifyAdminSession,
+  getAdminSession,
   signAdminSession,
   INACTIVITY_TIMEOUT_MS,
 } from '@/lib/auth/admin-session';
@@ -15,16 +15,18 @@ export async function GET() {
     return NextResponse.json({ authenticated: false }, { status: 401 });
   }
 
-  const { session, expired } = verifyAdminSession(token);
-  if (!session || expired) {
+  // getAdminSession verifies token signature, checks 15-min timeout,
+  // and dynamically syncs permissions with Supabase in real-time
+  const session = await getAdminSession();
+  if (!session) {
     cookieStore.delete(ADMIN_COOKIE_NAME);
     return NextResponse.json(
-      { authenticated: false, reason: expired ? 'inactivity_timeout' : 'invalid_session' },
+      { authenticated: false, reason: 'invalid_or_revoked_session' },
       { status: 401 }
     );
   }
 
-  // Activity Refresh (Sliding session window while user is active)
+  // Activity Refresh (Sliding session window while user is actively clicking)
   const updatedSession = {
     ...session,
     lastActive: Date.now(),
@@ -51,4 +53,3 @@ export async function GET() {
     },
   });
 }
-

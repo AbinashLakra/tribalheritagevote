@@ -20,3 +20,4 @@ CREATE POLICY "Allow service role full access on otp_codes"
     TO service_role
     USING (true)
     WITH CHECK (true);
+

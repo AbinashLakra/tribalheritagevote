@@ -14,15 +14,18 @@ import {
   Loader2,
   Clock,
   Send,
+  Check,
+  Crown,
 } from 'lucide-react';
+import { ROLE_PRESETS, RoleCategoryKey } from '@/lib/auth/admin-constants';
 
 export default function RequestAdminAccessPage() {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [roleCategory, setRoleCategory] = useState('video_reviewer');
+  const [roleCategory, setRoleCategory] = useState<RoleCategoryKey>('all_access');
   const [reason, setReason] = useState('');
-  
+
   // OTP state
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
@@ -106,7 +109,9 @@ export default function RequestAdminAccessPage() {
     setLoading(true);
 
     try {
-      const detailedReason = `[${roleCategory.toUpperCase()}] ${reason.trim()}`;
+      const selectedPreset = ROLE_PRESETS[roleCategory];
+      const detailedReason = `[${selectedPreset.badge.toUpperCase()}] ${reason.trim()}`;
+
       const res = await fetch('/api/admin/requests/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -114,6 +119,7 @@ export default function RequestAdminAccessPage() {
           full_name: fullName.trim(),
           phone: cleanPhone,
           email: email.trim(),
+          role_category: roleCategory,
           reason: detailedReason,
           otp: otp.trim(),
         }),
@@ -131,6 +137,8 @@ export default function RequestAdminAccessPage() {
       setLoading(false);
     }
   };
+
+  const currentPreset = ROLE_PRESETS[roleCategory];
 
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 bg-grid-pattern relative">
@@ -159,7 +167,8 @@ export default function RequestAdminAccessPage() {
                 Admin Access Request Submitted!
               </h2>
               <p className="text-xs sm:text-sm text-slate-600 max-w-sm mx-auto leading-relaxed">
-                Your mobile number <strong>+91 {phone.slice(-10)}</strong> has been verified via SMS OTP. The Main Super Admin will review your application and assign feature permissions. Once approved, you can log in immediately via the Delegated Sub-Admin tab.
+                Your mobile number <strong>+91 {phone.slice(-10)}</strong> has been verified via SMS OTP for{' '}
+                <strong className="text-blue-900">{currentPreset.label}</strong>. The Main Super Admin will review your application and can approve or fine-tune your feature permissions. Once approved, you can log in immediately via the Delegated Sub-Admin tab.
               </p>
               <div className="pt-4 flex justify-center">
                 <Link
@@ -297,21 +306,60 @@ export default function RequestAdminAccessPage() {
                 </div>
               </div>
 
-              {/* Requested Role Category */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                  Requested Functional Role
-                </label>
+              {/* Requested Functional Role (Including ALL ACCESS Option) */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                    Requested Functional Role
+                  </label>
+                  {roleCategory === 'all_access' && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
+                      <Crown className="w-3 h-3 text-amber-600" />
+                      All Access Mode
+                    </span>
+                  )}
+                </div>
+                
                 <select
                   value={roleCategory}
-                  onChange={(e) => setRoleCategory(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  onChange={(e) => setRoleCategory(e.target.value as RoleCategoryKey)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm bg-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-600"
                 >
-                  <option value="video_reviewer">Video Performance Reviewer (Jury)</option>
-                  <option value="contest_coordinator">Contest Lifecycle Coordinator</option>
-                  <option value="auditor">Voting Integrity &amp; Audit Inspector</option>
-                  <option value="data_analyst">Results &amp; Analytics Officer</option>
+                  <option value="all_access">⭐ All Platform Delegated Access (All Categories)</option>
+                  <option value="video_reviewer">🎬 Video Performance Reviewer (Jury Only)</option>
+                  <option value="contest_coordinator">⏱️ Contest Lifecycle Coordinator</option>
+                  <option value="auditor">🔍 Voting Integrity &amp; Audit Inspector</option>
+                  <option value="data_analyst">📊 Results &amp; Analytics Officer</option>
                 </select>
+
+                {/* Scope Preview Card */}
+                <div className="p-3 rounded-xl bg-blue-50/70 border border-blue-200 text-xs text-blue-950 space-y-1.5">
+                  <div className="font-bold flex items-center gap-1.5 text-[#0f2d59]">
+                    <span>Scope:</span>
+                    <span>{currentPreset.label}</span>
+                  </div>
+                  <p className="text-[11px] text-blue-800 leading-relaxed">
+                    {currentPreset.description}
+                  </p>
+                  <div className="pt-1 flex flex-wrap gap-1.5">
+                    {Object.entries(currentPreset.permissions).map(([key, val]) => {
+                      if (!val || key === 'can_manage_admins') return null;
+                      const niceName = key
+                        .replace('can_', '')
+                        .replace('_', ' ')
+                        .replace(/\b\w/g, (c) => c.toUpperCase());
+                      return (
+                        <span
+                          key={key}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white border border-blue-200 text-[10px] font-semibold text-blue-900"
+                        >
+                          <Check className="w-2.5 h-2.5 text-emerald-600" />
+                          {niceName}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
 
               {/* Purpose / Reason */}
@@ -323,7 +371,7 @@ export default function RequestAdminAccessPage() {
                   rows={2}
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
-                  placeholder="Explain why you require admin console access and your role in the Rourkela event organization."
+                  placeholder="Explain why you require admin access, which committee or jury role you serve, and why this scope is requested."
                   required
                   className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />

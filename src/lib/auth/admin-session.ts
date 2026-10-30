@@ -8,6 +8,7 @@ import {
   AdminSessionPayload,
   SUPER_ADMIN_PERMISSIONS,
 } from './admin-constants';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 export * from './admin-constants';
 
@@ -70,6 +71,8 @@ export function verifyAdminSession(token: string): { session: AdminSessionPayloa
 
 /**
  * Reads and validates the current admin session from incoming cookies.
+ * For Delegated Sub-Admins, it verifies active approval status against Supabase
+ * in real-time and dynamically reflects shifted permissions set by the Super Admin.
  */
 export async function getAdminSession(): Promise<AdminSessionPayload | null> {
   const cookieStore = await cookies();
@@ -79,6 +82,50 @@ export async function getAdminSession(): Promise<AdminSessionPayload | null> {
   const { session, expired } = verifyAdminSession(token);
   if (!session || expired) {
     return null;
+  }
+
+  // Super Admin maintains master privileges directly
+  if (session.role === 'super_admin') {
+    return session;
+  }
+
+  // Delegated Sub-Admin: Real-time dynamic sync with admin_access_requests
+  if (session.role === 'sub_admin' && (session.adminId || session.phone)) {
+    try {
+      const admin = createAdminClient();
+      let query = admin.from('admin_access_requests').select('status, permissions');
+
+      if (session.adminId) {
+        query = query.eq('id', session.adminId);
+      } else if (session.phone) {
+        query = query.eq('phone', session.phone);
+      }
+
+      const { data: record, error } = await query.maybeSingle();
+
+      if (error || !record) {
+        return session; // fallback to session if db query error
+      }
+
+      // If Main Admin has revoked or rejected this sub-admin, lock them out immediately!
+      if (record.status !== 'approved') {
+        return null;
+      }
+
+      // Dynamically reflect any shifted permissions updated by Main Super Admin
+      if (record.permissions && typeof record.permissions === 'object') {
+        session.permissions = {
+          can_moderate_videos: Boolean(record.permissions.can_moderate_videos),
+          can_manage_contest: Boolean(record.permissions.can_manage_contest),
+          can_view_audit_logs: Boolean(record.permissions.can_view_audit_logs),
+          can_export_data: Boolean(record.permissions.can_export_data),
+          can_view_analytics: Boolean(record.permissions.can_view_analytics ?? true),
+          can_manage_admins: false,
+        };
+      }
+    } catch {
+      // Graceful fallback on network glitch
+    }
   }
 
   return session;
