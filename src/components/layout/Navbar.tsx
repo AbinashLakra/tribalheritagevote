@@ -1,151 +1,145 @@
 "use client";
 
-/**
- * @file Responsive navigation bar for the Tribal Heritage Vote platform.
- * Includes desktop links, mobile hamburger menu, and a prominent Nominate CTA.
- */
-
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Menu, X, TreePine } from "lucide-react";
+import { Home, Users, Shield, Sparkles, Menu, X, Award, Vote } from "lucide-react";
+import { TribalRibbonBorder } from "@/components/shared/TribalRibbonBorder";
 
-import { cn } from "@/lib/utils/cn";
-import { siteConfig } from "@/config/site";
-
-/**
- * Primary site navigation bar.
- *
- * Renders a sticky, backdrop-blurred header with desktop nav links,
- * a mobile hamburger menu, and a "Nominate" call-to-action button.
- */
 export function Navbar() {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <header
-      className={cn(
-        "sticky top-0 z-50 w-full",
-        "border-b border-ivory-300/60",
-        "bg-ivory-50/80 backdrop-blur-md",
-      )}
-    >
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        {/* ── Logo / Brand ── */}
-        <Link
-          href="/"
-          className="flex items-center gap-2 transition-opacity hover:opacity-80"
-          aria-label={siteConfig.name}
-        >
-          <TreePine className="h-7 w-7 text-forest-600" aria-hidden="true" />
-          <span className="text-lg font-bold tracking-tight text-forest-700">
-            {siteConfig.name}
-          </span>
-        </Link>
-
-        {/* ── Desktop Navigation ── */}
-        <nav className="hidden items-center gap-1 lg:flex" aria-label="Main">
-          {siteConfig.navLinks.map((link) => {
-            const isActive = pathname === link.href;
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={cn(
-                  "rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                  isActive
-                    ? "bg-forest-50 text-forest-700"
-                    : "text-charcoal-600 hover:bg-ivory-200 hover:text-charcoal-900",
-                )}
-                aria-current={isActive ? "page" : undefined}
-              >
-                {link.label}
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* ── Desktop CTA + Mobile Toggle ── */}
-        <div className="flex items-center gap-3">
-          {/* Nominate CTA (always visible) */}
+    <header className="sticky top-0 z-50 w-full shadow-md">
+      {/* ── Main Blue Header Bar ── */}
+      <div className="bg-[#0f2d59] text-white border-b border-blue-800">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+          {/* Brand Logo & Title */}
           <Link
-            href="/artist/nomination"
-            className={cn(
-              "hidden rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm sm:inline-flex",
-              "bg-terracotta-500 transition-colors hover:bg-terracotta-600",
-              "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-terracotta-500",
-            )}
+            href="/"
+            className="flex items-center gap-3 transition-transform hover:scale-[1.02]"
+            aria-label="Tribal Heritage 2026"
           >
-            Nominate
+            {/* Circular Tribal Badge */}
+            <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-[#1b2e23] border-2 border-amber-400 shadow-inner">
+              <span className="text-xs font-bold text-amber-300">TH</span>
+              <div className="absolute inset-0 rounded-full border border-amber-400/40 animate-pulse" />
+            </div>
+
+            <div className="flex flex-col">
+              <span className="text-lg sm:text-xl font-extrabold tracking-wider text-white uppercase drop-shadow-sm">
+                TRIBAL HERITAGE 2026
+              </span>
+              <span className="text-[10px] text-blue-200 tracking-wider -mt-1 font-medium hidden sm:inline">
+                ROURKELA, ODISHA • ALL-INDIA ADIVASI PLATFORM
+              </span>
+            </div>
           </Link>
 
-          {/* Mobile hamburger button */}
+          {/* Desktop Navigation Buttons */}
+          <nav className="hidden items-center gap-2 sm:gap-3 md:flex" aria-label="Main">
+            {/* Home */}
+            <Link
+              href="/"
+              className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all border ${
+                pathname === "/"
+                  ? "bg-white/20 border-white/40 text-white"
+                  : "border-transparent hover:bg-white/10 text-blue-100 hover:text-white"
+              }`}
+            >
+              <Home className="h-4 w-4 text-blue-200" />
+              <span>Home</span>
+            </Link>
+
+            {/* Delegate / Voter Portal (Gold button from screenshot) */}
+            <Link
+              href="/artists"
+              className="flex items-center gap-1.5 rounded-lg bg-[#b45309] hover:bg-[#92400e] text-white px-3.5 py-1.5 text-xs sm:text-sm font-bold shadow transition-all border border-amber-500/40"
+            >
+              <Vote className="h-4 w-4 text-amber-200" />
+              <span>Delegate / Vote</span>
+            </Link>
+
+            {/* Admin Portal (Navy Dark button from screenshot) */}
+            <Link
+              href="/admin"
+              className="flex items-center gap-1.5 rounded-lg bg-[#0f172a] hover:bg-[#1e293b] text-white px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all border border-slate-700 shadow"
+            >
+              <Shield className="h-4 w-4 text-blue-400" />
+              <span>Admin</span>
+            </Link>
+
+            {/* Register / Nominate (White Pill button with Sparkle from screenshot) */}
+            <Link
+              href="/artist/nomination"
+              className="flex items-center gap-1.5 rounded-full bg-white hover:bg-blue-50 text-[#0f2d59] px-4 py-1.5 text-xs sm:text-sm font-bold shadow-md transition-all hover:scale-105"
+            >
+              <Sparkles className="h-4 w-4 text-amber-600" />
+              <span>Register</span>
+            </Link>
+          </nav>
+
+          {/* Mobile Hamburger Toggle */}
           <button
             type="button"
-            className={cn(
-              "inline-flex items-center justify-center rounded-md p-2 lg:hidden",
-              "text-charcoal-600 hover:bg-ivory-200 hover:text-charcoal-900",
-              "transition-colors",
-            )}
-            onClick={() => setMobileMenuOpen((prev) => !prev)}
-            aria-expanded={mobileMenuOpen}
-            aria-controls="mobile-menu"
-            aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="flex items-center justify-center rounded-lg p-2 text-white hover:bg-white/10 md:hidden"
+            aria-label="Toggle menu"
           >
-            {mobileMenuOpen ? (
-              <X className="h-6 w-6" aria-hidden="true" />
-            ) : (
-              <Menu className="h-6 w-6" aria-hidden="true" />
-            )}
+            {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </button>
         </div>
       </div>
 
-      {/* ── Mobile Slide-Down Menu ── */}
-      <div
-        id="mobile-menu"
-        className={cn(
-          "overflow-hidden border-t border-ivory-300/60 lg:hidden",
-          "transition-all duration-300 ease-in-out",
-          mobileMenuOpen ? "max-h-[32rem] opacity-100" : "max-h-0 opacity-0",
-        )}
-        aria-hidden={!mobileMenuOpen}
-      >
-        <nav className="space-y-1 px-4 pb-4 pt-2" aria-label="Mobile">
-          {siteConfig.navLinks.map((link) => {
-            const isActive = pathname === link.href;
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={() => setMobileMenuOpen(false)}
-                className={cn(
-                  "block rounded-md px-3 py-2 text-base font-medium transition-colors",
-                  isActive
-                    ? "bg-forest-50 text-forest-700"
-                    : "text-charcoal-600 hover:bg-ivory-200 hover:text-charcoal-900",
-                )}
-                aria-current={isActive ? "page" : undefined}
-              >
-                {link.label}
-              </Link>
-            );
-          })}
+      {/* ── Cultural Ribbon Border (Under Navbar) ── */}
+      <TribalRibbonBorder variant="light" />
 
-          {/* Mobile Nominate CTA */}
+      {/* ── Mobile Dropdown Menu ── */}
+      {mobileMenuOpen && (
+        <div className="bg-[#0b1f3c] border-b border-blue-800 text-white p-4 space-y-3 md:hidden">
+          <Link
+            href="/"
+            onClick={() => setMobileMenuOpen(false)}
+            className="flex items-center gap-2 p-2 rounded hover:bg-white/10 font-medium"
+          >
+            <Home className="h-4 w-4 text-blue-300" />
+            Home
+          </Link>
+          <Link
+            href="/artists"
+            onClick={() => setMobileMenuOpen(false)}
+            className="flex items-center gap-2 p-2 rounded bg-[#b45309] text-white font-semibold"
+          >
+            <Vote className="h-4 w-4" />
+            Delegate / Voter Showcase
+          </Link>
           <Link
             href="/artist/nomination"
             onClick={() => setMobileMenuOpen(false)}
-            className={cn(
-              "mt-2 block rounded-lg px-3 py-2.5 text-center text-base font-semibold text-white",
-              "bg-terracotta-500 transition-colors hover:bg-terracotta-600",
-            )}
+            className="flex items-center gap-2 p-2 rounded bg-white text-[#0f2d59] font-bold"
           >
-            Nominate
+            <Sparkles className="h-4 w-4 text-amber-600" />
+            Artist Registration
           </Link>
-        </nav>
-      </div>
+          <Link
+            href="/leaderboard"
+            onClick={() => setMobileMenuOpen(false)}
+            className="flex items-center gap-2 p-2 rounded hover:bg-white/10 font-medium"
+          >
+            <Award className="h-4 w-4 text-amber-400" />
+            Leaderboard &amp; Live Graph
+          </Link>
+          <Link
+            href="/admin"
+            onClick={() => setMobileMenuOpen(false)}
+            className="flex items-center gap-2 p-2 rounded bg-[#0f172a] text-white font-medium"
+          >
+            <Shield className="h-4 w-4 text-blue-400" />
+            Admin Portal
+          </Link>
+        </div>
+      )}
     </header>
   );
 }
