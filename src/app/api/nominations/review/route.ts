@@ -1,36 +1,54 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getAdminSession } from '@/lib/auth/admin-session';
+import { createClient } from '@/lib/supabase/server';
 import { nominationReviewSchema } from '@/features/nominations/schemas';
 import { validateRequestBody } from '@/lib/security/request-validation';
 import { logAuditEvent } from '@/lib/security/audit';
 
 export async function POST(request: NextRequest) {
   try {
-    // 1. Authenticate reviewer
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    // 1. Check if logged in via dual-role Admin Console session
+    const adminSession = await getAdminSession();
+    let isAuthorized = false;
+    let reviewerName = 'Admin';
+    let actorId = 'admin-user';
 
-    if (authError || !user) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized: Please log in.' },
-        { status: 401 }
-      );
+    if (adminSession) {
+      if (adminSession.role === 'super_admin' || adminSession.permissions?.can_moderate_videos) {
+        isAuthorized = true;
+        reviewerName = adminSession.name || adminSession.username;
+        actorId = adminSession.adminId || adminSession.username;
+      }
     }
 
-    const admin = createAdminClient();
+    // 2. Fallback to Supabase Auth session if not logged in via admin cookie
+    if (!isAuthorized) {
+      const supabase = await createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-    // 2. Check role authorization (Reviewer or Admin)
-    const { data: userRole } = await admin
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['reviewer', 'admin', 'super_admin'])
-      .single();
+      if (user) {
+        const admin = createAdminClient();
+        const { data: userRole } = await admin
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', user.id)
+          .in('role', ['reviewer', 'admin', 'super_admin'])
+          .maybeSingle();
 
-    if (!userRole) {
+        if (userRole) {
+          isAuthorized = true;
+          reviewerName = user.email || 'Staff Reviewer';
+          actorId = user.id;
+        }
+      }
+    }
+
+    if (!isAuthorized) {
       return NextResponse.json(
-        { success: false, error: 'Forbidden: Reviewer or Admin role required.' },
+        { success: false, error: 'Unauthorized: Reviewer or Video Moderator privileges required.' },
         { status: 403 }
       );
     }
@@ -51,6 +69,8 @@ export async function POST(request: NextRequest) {
     else if (action === 'reject') targetStatus = 'rejected';
     else targetStatus = 'correction_required';
 
+    const admin = createAdminClient();
+
     // 4. Update nomination status atomically
     const { data: updatedNomination, error: updateError } = await admin
       .from('nominations')
@@ -61,37 +81,37 @@ export async function POST(request: NextRequest) {
         reviewed_at: new Date().toISOString(),
       })
       .eq('id', nominationId)
-      .select('id, title, status')
+      .select('id, title, status, artist_profile_id')
       .single();
 
     if (updateError || !updatedNomination) {
       return NextResponse.json(
-        { success: false, error: 'Failed to update nomination moderation status.' },
+        { success: false, error: 'Failed to update nomination status: ' + updateError?.message },
         { status: 500 }
       );
     }
 
-    // 5. Audit log
+    // 5. Audit Log Entry
     await logAuditEvent({
-      actorId: user.id,
+      actorId,
       action: `nomination_${action}`,
       targetEntity: 'nominations',
       targetId: nominationId,
       details: {
+        reviewer: reviewerName,
         action,
-        newStatus: targetStatus,
-        reviewerNotes,
-        rejectionReason,
+        status: targetStatus,
+        notes: reviewerNotes,
       },
     });
 
     return NextResponse.json({
       success: true,
+      message: `Nomination marked as ${targetStatus.toUpperCase()} by ${reviewerName}.`,
       data: updatedNomination,
-      message: `Nomination marked as ${targetStatus}.`,
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Moderation action failed';
+    const message = err instanceof Error ? err.message : 'Error reviewing nomination';
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }

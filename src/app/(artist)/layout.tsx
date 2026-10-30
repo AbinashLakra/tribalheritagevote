@@ -1,48 +1,48 @@
 import Link from 'next/link';
-import { TreePine, User, Video, LayoutDashboard, Home } from 'lucide-react';
+import { Shield, Sparkles, Video, User, LayoutDashboard, Home, ArrowLeft } from 'lucide-react';
 
 export default function ArtistLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-ivory-50 flex flex-col">
-      {/* Top Bar */}
-      <header className="sticky top-0 z-40 bg-white border-b border-ivory-200">
+    <div className="min-h-screen bg-slate-50 flex flex-col bg-grid-pattern">
+      {/* Traditional Warli Dancing Ribbon Banner */}
+      <div className="w-full bg-[#0a1c36] text-white border-b border-blue-950 py-1.5 px-4 text-center overflow-hidden">
+        <div className="flex items-center justify-center gap-4 text-[11px] font-semibold text-blue-200 tracking-wider">
+          <span>❖ DHARTI AABA VEER BIRSA MUNDA TRIBAL HERITAGE FESTIVAL 2026 ❖</span>
+          <span className="hidden md:inline text-amber-400">• ROURKELA, SUNDARGARH, ODISHA •</span>
+        </div>
+      </div>
+
+      {/* Top Header Bar */}
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-6">
-            <Link href="/" className="flex items-center gap-2 group">
-              <div className="w-9 h-9 rounded-lg bg-forest-700 flex items-center justify-center text-white shadow-sm">
-                <TreePine className="w-5 h-5" />
+            <Link href="/" className="flex items-center gap-2.5 group">
+              <div className="w-9 h-9 rounded-xl bg-[#0f2d59] flex items-center justify-center text-white shadow-sm group-hover:scale-105 transition-transform">
+                <Sparkles className="w-5 h-5 text-amber-400" />
               </div>
               <div>
-                <span className="font-bold text-lg text-forest-900 leading-tight block">
-                  Tribal Heritage Vote
+                <span className="font-extrabold text-base text-[#0f2d59] leading-tight block uppercase tracking-wide">
+                  Tribal Heritage
                 </span>
-                <span className="text-[10px] uppercase font-semibold text-terracotta-600 tracking-wider block">
-                  Artist Portal
+                <span className="text-[10px] uppercase font-bold text-amber-700 tracking-wider block">
+                  Artist Nomination Portal
                 </span>
               </div>
             </Link>
 
             <nav className="hidden md:flex items-center gap-1">
               <Link
-                href="/artist/dashboard"
-                className="px-3 py-1.5 rounded-md text-sm font-medium text-charcoal-700 hover:text-forest-700 hover:bg-forest-50 transition-colors flex items-center gap-1.5"
-              >
-                <LayoutDashboard className="w-4 h-4" />
-                Dashboard
-              </Link>
-              <Link
-                href="/artist/profile"
-                className="px-3 py-1.5 rounded-md text-sm font-medium text-charcoal-700 hover:text-forest-700 hover:bg-forest-50 transition-colors flex items-center gap-1.5"
-              >
-                <User className="w-4 h-4" />
-                Artist Profile
-              </Link>
-              <Link
                 href="/artist/nomination"
-                className="px-3 py-1.5 rounded-md text-sm font-medium text-charcoal-700 hover:text-forest-700 hover:bg-forest-50 transition-colors flex items-center gap-1.5"
+                className="px-3.5 py-2 rounded-xl text-xs font-bold text-[#0f2d59] bg-blue-50 border border-blue-200 transition-colors flex items-center gap-1.5"
               >
-                <Video className="w-4 h-4" />
-                Submit Nomination
+                <Video className="w-3.5 h-3.5 text-blue-700" />
+                <span>Submit Video Nomination</span>
+              </Link>
+              <Link
+                href="/artists"
+                className="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:text-blue-900 hover:bg-slate-100 transition-colors flex items-center gap-1.5"
+              >
+                <span>National Showcase</span>
               </Link>
             </nav>
           </div>
@@ -50,20 +50,24 @@ export default function ArtistLayout({ children }: { children: React.ReactNode }
           <div className="flex items-center gap-3">
             <Link
               href="/"
-              className="text-xs font-semibold text-charcoal-600 hover:text-forest-700 flex items-center gap-1 px-3 py-1.5 rounded-lg border border-ivory-300 hover:bg-ivory-100 transition-colors"
+              className="text-xs font-bold text-slate-700 hover:text-[#0f2d59] flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-300 hover:bg-slate-50 transition-colors shadow-xs"
             >
-              <Home className="w-3.5 h-3.5" />
-              Back to Public Site
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Back to Public Website</span>
             </Link>
           </div>
         </div>
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
         {children}
       </main>
+
+      {/* Footer */}
+      <footer className="bg-white border-t border-slate-200 py-6 text-center text-xs text-slate-500">
+        <p>© 2026 Tribal Heritage Organizer Committee • Dharti Aaba Veer Birsa Munda 151st Jayanti • Rourkela, Sundargarh, Odisha</p>
+      </footer>
     </div>
   );
 }
-

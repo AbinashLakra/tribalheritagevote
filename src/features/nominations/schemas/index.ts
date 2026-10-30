@@ -1,31 +1,46 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 /** Nomination submission schema */
 export const nominationSchema = z.object({
-  contestId: z.string().uuid("Invalid contest ID"),
-  categoryId: z.string().uuid("Invalid category ID"),
+  // Artist Personal Information
+  fullName: z.string().min(2, 'Official / Full name is required').max(150),
+  stageName: z.string().min(2, 'Stage / Troupe name is required').max(150),
+  phone: z
+    .string()
+    .min(10, 'Mobile number must be 10 digits')
+    .max(10, 'Mobile number must be 10 digits')
+    .regex(/^\d{10}$/, 'Must be a valid 10-digit Indian mobile number'),
+  state: z.string().min(2, 'State is required'),
+  district: z.string().min(2, 'District is required'),
+  language: z.string().min(2, 'Language / Dialect is required'),
+  tribe: z.string().min(2, 'Tribe / Community is required'),
+  experienceYears: z.coerce.number().min(0).max(80).default(3),
+  bio: z.string().min(10, 'Brief artist bio must be at least 10 characters').max(2000),
+
+  // Contest & Performance Details
+  contestId: z.string().uuid('Invalid contest ID'),
+  categoryId: z.string().uuid('Invalid category ID'),
   title: z
     .string()
-    .min(5, "Title must be at least 5 characters")
-    .max(200, "Title must not exceed 200 characters"),
+    .min(5, 'Performance title must be at least 5 characters')
+    .max(200, 'Performance title must not exceed 200 characters'),
   description: z
     .string()
-    .min(20, "Description must be at least 20 characters")
-    .max(3000, "Description must not exceed 3000 characters"),
+    .min(20, 'Performance description must be at least 20 characters')
+    .max(3000, 'Performance description must not exceed 3000 characters'),
 });
 
 /** Nomination review schema (for reviewers/admins) */
 export const nominationReviewSchema = z.object({
-  nominationId: z.string().uuid("Invalid nomination ID"),
-  action: z.enum(["approve", "reject", "request_correction"]),
+  nominationId: z.string().uuid('Invalid nomination ID'),
+  action: z.enum(['approve', 'reject', 'request_correction']),
   reviewerNotes: z.string().max(1000).optional(),
   rejectionReason: z
     .string()
-    .min(10, "Please provide a reason for rejection")
+    .min(5, 'Please provide a reason for rejection')
     .max(1000)
     .optional(),
 });
 
 export type NominationInput = z.infer<typeof nominationSchema>;
 export type NominationReviewInput = z.infer<typeof nominationReviewSchema>;
-
