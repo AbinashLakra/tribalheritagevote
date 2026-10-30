@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <radialGradient id="tribalGrad" cx="50%" cy="50%" r="50%" fx="35%" fy="35%">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="60%" stop-color="#c25e38" />
+      <stop offset="100%" stop-color="#1b2e23" />
+    </radialGradient>
+  </defs>
+  <!-- Background Badge -->
+  <circle cx="32" cy="32" r="30" fill="#1b2e23" stroke="#fbbf24" stroke-width="2.5" />
+  
+  <!-- Geometric Tribal Sun Rays -->
+  <g stroke="#fbbf24" stroke-width="2.5" stroke-linecap="round">
+    <line x1="32" y1="6" x2="32" y2="13" />
+    <line x1="32" y1="51" x2="32" y2="58" />
+    <line x1="6" y1="32" x2="13" y2="32" />
+    <line x1="51" y1="32" x2="58" y2="32" />
+    <line x1="13.6" y1="13.6" x2="18.5" y2="18.5" />
+    <line x1="45.5" y1="45.5" x2="50.4" y2="50.4" />
+    <line x1="13.6" y1="50.4" x2="18.5" y2="45.5" />
+    <line x1="45.5" y1="18.5" x2="50.4" y2="13.6" />
+  </g>
+
+  <!-- Sacred Tribal Drum / Emblem Core -->
+  <circle cx="32" cy="32" r="15" fill="#c25e38" stroke="#fbbf24" stroke-width="2" />
+  <polygon points="32,20 35,27 42,28 37,33 39,40 32,36 25,40 27,33 22,28 29,27" fill="#fbbf24" />
+  <circle cx="32" cy="32" r="4" fill="#1b2e23" />
+</svg>

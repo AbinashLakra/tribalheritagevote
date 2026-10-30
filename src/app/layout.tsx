@@ -40,6 +40,10 @@ export const metadata: Metadata = {
     description:
       "Celebrating and preserving India's rich Adivasi cultural heritage through digital nomination, video showcase, and democratic voting.",
   },
+  icons: {
+    icon: [{ url: '/favicon.svg', type: 'image/svg+xml' }],
+    apple: [{ url: '/favicon.svg', type: 'image/svg+xml' }],
+  },
   robots: {
     index: true,
     follow: true,
