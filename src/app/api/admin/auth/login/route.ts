@@ -8,6 +8,7 @@ import {
   INACTIVITY_TIMEOUT_MS,
 } from '@/lib/auth/admin-session';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { verifyOtpCode } from '@/lib/sms/sms-service';
 
 export async function POST(req: NextRequest) {
   try {
@@ -78,10 +79,11 @@ export async function POST(req: NextRequest) {
 
       const cleanPhone = phone.replace(/\D/g, '').slice(-10);
 
-      // Verify OTP (accept standard sandbox OTP 123456 for testing)
-      if (otp !== '123456' && otp !== '000000') {
+      // Verify dynamic OTP using SMS verification engine
+      const otpCheck = await verifyOtpCode(cleanPhone, otp);
+      if (!otpCheck.success) {
         return NextResponse.json(
-          { success: false, error: 'Invalid OTP. For test verification, use 123456.' },
+          { success: false, error: otpCheck.message },
           { status: 401 }
         );
       }

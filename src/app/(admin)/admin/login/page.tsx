@@ -1,9 +1,21 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Shield, KeyRound, Phone, ArrowRight, Lock, CheckCircle2, AlertCircle, Sparkles, UserCheck } from 'lucide-react';
+import {
+  Shield,
+  KeyRound,
+  Phone,
+  ArrowRight,
+  Lock,
+  CheckCircle2,
+  AlertCircle,
+  UserCheck,
+  Loader2,
+  Clock,
+  Send,
+} from 'lucide-react';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -23,6 +35,18 @@ export default function AdminLoginPage() {
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [otpNotice, setOtpNotice] = useState<string | null>(null);
+  const [cooldown, setCooldown] = useState(0);
+
+  // Cooldown countdown timer
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setInterval(() => {
+      setCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [cooldown]);
 
   const handleSuperAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,7 +65,7 @@ export default function AdminLoginPage() {
         throw new Error(data.error || 'Login failed. Please verify master password.');
       }
 
-      setSuccess('Super Admin authenticated! Redirecting to dashboard...');
+      setSuccess('Super Admin authenticated! Redirecting to master dashboard...');
       setTimeout(() => {
         router.push('/admin');
         router.refresh();
@@ -53,16 +77,76 @@ export default function AdminLoginPage() {
     }
   };
 
+  // Dispatch OTP via SMS to approved sub-admin's phone
+  const handleSendSubAdminOtp = async () => {
+    const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+    if (!cleanPhone || cleanPhone.length !== 10) {
+      setError('Please enter a valid 10-digit mobile number first.');
+      return;
+    }
+
+    setSendingOtp(true);
+    setError(null);
+    setOtpNotice(null);
+
+    try {
+      const res = await fetch('/api/auth/otp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: cleanPhone }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to dispatch login OTP.');
+      }
+
+      setOtpSent(true);
+      setCooldown(60);
+
+      if (data.codePreview) {
+        setOtpNotice(`OTP generated for +91 ${cleanPhone}. Code: ${data.codePreview} (Valid for 5 min).`);
+      } else {
+        setOtpNotice(`SMS OTP dispatched to +91 ${cleanPhone}. Please enter the 6-digit code received.`);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error sending OTP. Please try again.');
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
   const handleSubAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError(null);
+
+    const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+    if (cleanPhone.length !== 10) {
+      setError('Please enter a valid 10-digit mobile number.');
+      return;
+    }
+
+    if (!otpSent) {
+      setError('Please click "Send OTP via SMS" first to receive your verification code.');
+      return;
+    }
+
+    if (!otp || otp.trim().length !== 6) {
+      setError('Please enter the 6-digit OTP code received on your phone.');
+      return;
+    }
+
+    setLoading(true);
 
     try {
       const res = await fetch('/api/admin/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'sub_admin', phone, otp }),
+        body: JSON.stringify({
+          type: 'sub_admin',
+          phone: cleanPhone,
+          otp: otp.trim(),
+        }),
       });
 
       const data = await res.json();
@@ -115,7 +199,7 @@ export default function AdminLoginPage() {
               setActiveTab('super_admin');
               setError(null);
             }}
-            className={`py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+            className={`py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               activeTab === 'super_admin'
                 ? 'bg-white text-[#0f2d59] shadow-sm'
                 : 'text-slate-600 hover:text-slate-900'
@@ -131,7 +215,7 @@ export default function AdminLoginPage() {
               setActiveTab('sub_admin');
               setError(null);
             }}
-            className={`py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+            className={`py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               activeTab === 'sub_admin'
                 ? 'bg-white text-[#0f2d59] shadow-sm'
                 : 'text-slate-600 hover:text-slate-900'
@@ -180,7 +264,7 @@ export default function AdminLoginPage() {
                   <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
                     Constant Master Password
                   </label>
-                  <span className="text-[10px] text-slate-400">Persistent Admin Key</span>
+                  <span className="text-[10px] text-slate-400">Persistent Master Key</span>
                 </div>
                 <div className="relative">
                   <input
@@ -196,16 +280,25 @@ export default function AdminLoginPage() {
               </div>
 
               <p className="text-[11px] text-slate-500 leading-normal">
-                🛡️ Super Admin holds unrestricted system privileges across contest timelines, full video approvals, user role delegations, and audit ledgers.
+                🛡️ Main Super Admin maintains constant master password access and full authority over contest lifecycle, sub-admin permissions, video reviews, and audit logs.
               </p>
 
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3 px-4 rounded-xl bg-[#0f2d59] hover:bg-blue-900 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full py-3 px-4 rounded-xl bg-[#0f2d59] hover:bg-blue-900 disabled:bg-slate-400 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
               >
-                {loading ? 'Authenticating...' : 'Sign In as Super Admin'}
-                <ArrowRight className="w-4 h-4" />
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Authenticating...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Sign In as Super Admin</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
               </button>
             </form>
           )}
@@ -213,10 +306,42 @@ export default function AdminLoginPage() {
           {/* ──────────────── TAB 2: SUB ADMIN LOGIN (PHONE + OTP) ──────────────── */}
           {activeTab === 'sub_admin' && (
             <form onSubmit={handleSubAdminLogin} className="space-y-4">
+              {otpNotice && (
+                <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 mt-0.5" />
+                  <span>{otpNotice}</span>
+                </div>
+              )}
+
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                  Approved Mobile Number
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                    Approved Mobile Number
+                  </label>
+                  <button
+                    type="button"
+                    disabled={sendingOtp || cooldown > 0 || phone.replace(/\D/g, '').length < 10}
+                    onClick={handleSendSubAdminOtp}
+                    className="text-[11px] font-bold text-blue-700 hover:text-blue-900 disabled:text-slate-400 disabled:no-underline flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    {sendingOtp ? (
+                      <>
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        <span>Sending SMS...</span>
+                      </>
+                    ) : cooldown > 0 ? (
+                      <>
+                        <Clock className="w-3 h-3" />
+                        <span>Resend in {cooldown}s</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-3 h-3" />
+                        <span>{otpSent ? 'Resend OTP via SMS' : 'Send OTP via SMS'}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
                 <div className="flex gap-2">
                   <div className="px-3 py-2.5 rounded-xl bg-slate-100 border border-slate-300 text-xs font-bold text-slate-600 flex items-center">
                     +91
@@ -225,7 +350,10 @@ export default function AdminLoginPage() {
                     type="tel"
                     maxLength={10}
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    onChange={(e) => {
+                      setPhone(e.target.value.replace(/\D/g, '').slice(0, 10));
+                      setError(null);
+                    }}
                     placeholder="9876543210"
                     required
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
@@ -238,46 +366,46 @@ export default function AdminLoginPage() {
                   <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
                     Verification OTP
                   </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!phone || phone.length < 10) {
-                        setError('Please enter a 10-digit mobile number first.');
-                        return;
-                      }
-                      setOtpSent(true);
-                      setOtp('123456');
-                      setError(null);
-                    }}
-                    className="text-[11px] font-bold text-blue-700 hover:underline"
-                  >
-                    {otpSent ? 'Resend OTP' : 'Send Test OTP'}
-                  </button>
+                  {otpSent && (
+                    <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" /> SMS dispatched
+                    </span>
+                  )}
                 </div>
                 <input
                   type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
                   maxLength={6}
                   value={otp}
-                  onChange={(e) => setOtp(e.target.value)}
-                  placeholder="Enter 6-digit OTP (123456)"
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder={otpSent ? 'Enter 6-digit code received' : 'Click "Send OTP via SMS" above first'}
+                  disabled={!otpSent}
                   required
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-mono tracking-widest text-center focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-mono tracking-widest text-center focus:outline-none focus:ring-2 focus:ring-blue-600 disabled:bg-slate-50 disabled:text-slate-400"
                 />
               </div>
 
-              {otpSent && (
-                <div className="p-2.5 rounded-lg bg-blue-50 text-[11px] text-blue-800">
-                  ⚡ Test OTP auto-filled: <strong>123456</strong>. (Access must be approved by Main Admin).
-                </div>
-              )}
+              <p className="text-[11px] text-slate-500 leading-normal">
+                📱 Requester Admins log in using their verified phone number and SMS OTP once their role is approved by the Main Super Admin.
+              </p>
 
               <button
                 type="submit"
-                disabled={loading}
-                className="w-full py-3 px-4 rounded-xl bg-[#b45309] hover:bg-[#92400e] text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                disabled={loading || !otpSent || otp.length !== 6}
+                className="w-full py-3 px-4 rounded-xl bg-[#b45309] hover:bg-[#92400e] disabled:bg-slate-400 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
               >
-                {loading ? 'Verifying...' : 'Sign In with OTP'}
-                <UserCheck className="w-4 h-4 text-amber-200" />
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Verifying OTP &amp; Signing In...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Sign In with OTP</span>
+                    <UserCheck className="w-4 h-4 text-amber-200" />
+                  </>
+                )}
               </button>
             </form>
           )}
@@ -307,4 +435,3 @@ export default function AdminLoginPage() {
     </div>
   );
 }
-

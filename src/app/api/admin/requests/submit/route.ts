@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { verifyOtpCode } from '@/lib/sms/sms-service';
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,15 +14,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Verify OTP for phone verification
-    if (!otp || (otp !== '123456' && otp !== '000000')) {
+    const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+
+    // Verify OTP using SMS verification engine
+    const otpCheck = await verifyOtpCode(cleanPhone, otp);
+    if (!otpCheck.success) {
       return NextResponse.json(
-        { success: false, error: 'Valid phone verification OTP is required. For testing, use OTP: 123456.' },
+        { success: false, error: otpCheck.message },
         { status: 400 }
       );
     }
-
-    const cleanPhone = phone.replace(/\D/g, '').slice(-10);
     const admin = createAdminClient();
 
     // Check if phone already requested

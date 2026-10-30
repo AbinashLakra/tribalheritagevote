@@ -1,32 +1,30 @@
-import { createClient } from '@/lib/supabase/browser';
-import { normalizePhoneNumber } from './authUtils';
 import { OtpRequestResult, OtpVerifyResult } from '../types';
+import { normalizePhoneNumber } from './authUtils';
 
 /**
- * Requests an SMS OTP for the given phone number using Supabase Auth.
+ * Requests an SMS OTP for the given phone number using our dedicated SMS API.
  */
 export async function sendOtp(phone: string): Promise<OtpRequestResult> {
   try {
-    const supabase = createClient();
-    const formattedPhone = normalizePhoneNumber(phone);
+    const formattedPhone = normalizePhoneNumber(phone).replace(/\D/g, '').slice(-10);
 
-    const { error } = await supabase.auth.signInWithOtp({
-      phone: formattedPhone,
-      options: {
-        channel: 'sms',
-      },
+    const res = await fetch('/api/auth/otp/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: formattedPhone }),
     });
 
-    if (error) {
+    const data = await res.json();
+    if (!res.ok || !data.success) {
       return {
         success: false,
-        message: error.message || 'Failed to send OTP. Please check the number and try again.',
+        message: data.error || 'Failed to dispatch verification OTP. Please try again.',
       };
     }
 
     return {
       success: true,
-      message: 'OTP sent successfully to your mobile number.',
+      message: data.message || 'OTP dispatched to your mobile number via SMS.',
       cooldownSeconds: 60,
     };
   } catch (err: unknown) {
@@ -39,23 +37,23 @@ export async function sendOtp(phone: string): Promise<OtpRequestResult> {
 }
 
 /**
- * Verifies the 6-digit OTP and establishes an authenticated session.
+ * Verifies the 6-digit OTP using our dedicated OTP verification API.
  */
 export async function verifyOtp(phone: string, token: string): Promise<OtpVerifyResult> {
   try {
-    const supabase = createClient();
-    const formattedPhone = normalizePhoneNumber(phone);
+    const formattedPhone = normalizePhoneNumber(phone).replace(/\D/g, '').slice(-10);
 
-    const { data, error } = await supabase.auth.verifyOtp({
-      phone: formattedPhone,
-      token,
-      type: 'sms',
+    const res = await fetch('/api/auth/otp/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: formattedPhone, otp: token }),
     });
 
-    if (error || !data.user) {
+    const data = await res.json();
+    if (!res.ok || !data.success) {
       return {
         success: false,
-        message: error?.message || 'Invalid or expired OTP. Please try again.',
+        message: data.error || 'Invalid or expired OTP code. Please check and try again.',
       };
     }
 
@@ -63,9 +61,9 @@ export async function verifyOtp(phone: string, token: string): Promise<OtpVerify
       success: true,
       message: 'Mobile number verified successfully.',
       user: {
-        id: data.user.id,
-        phone: data.user.phone || null,
-        email: data.user.email || null,
+        id: formattedPhone,
+        phone: `+91${formattedPhone}`,
+        email: null,
         isVerified: true,
       },
     };
@@ -82,6 +80,9 @@ export async function verifyOtp(phone: string, token: string): Promise<OtpVerify
  * Signs the user out of all sessions.
  */
 export async function signOut(): Promise<void> {
-  const supabase = createClient();
-  await supabase.auth.signOut();
+  try {
+    await fetch('/api/admin/auth/logout', { method: 'POST' });
+  } catch {
+    // ignore
+  }
 }
