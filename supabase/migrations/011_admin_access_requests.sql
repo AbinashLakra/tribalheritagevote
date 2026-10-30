@@ -42,3 +42,4 @@ CREATE POLICY "Allow service role full access on admin_access_requests"
     TO service_role
     USING (true)
     WITH CHECK (true);
+

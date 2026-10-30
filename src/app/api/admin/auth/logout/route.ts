@@ -7,3 +7,4 @@ export async function POST() {
   cookieStore.delete(ADMIN_COOKIE_NAME);
   return NextResponse.json({ success: true, message: 'Logged out successfully.' });
 }
+

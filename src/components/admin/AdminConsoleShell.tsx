@@ -286,3 +286,4 @@ export function AdminConsoleShell({ children }: { children: React.ReactNode }) {
     </AdminInactivityGuard>
   );
 }
+

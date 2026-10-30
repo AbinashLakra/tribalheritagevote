@@ -244,3 +244,4 @@ export default function RequestAdminAccessPage() {
     </div>
   );
 }
+

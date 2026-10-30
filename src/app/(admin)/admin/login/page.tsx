@@ -307,3 +307,4 @@ export default function AdminLoginPage() {
     </div>
   );
 }
+

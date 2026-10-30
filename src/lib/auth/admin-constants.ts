@@ -30,3 +30,4 @@ export const SUPER_ADMIN_PERMISSIONS: AdminPermissions = {
   can_view_analytics: true,
   can_manage_admins: true,
 };
+
