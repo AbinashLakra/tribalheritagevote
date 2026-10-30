@@ -146,3 +146,4 @@ To ensure video uploads from artists' mobile phones never get blocked by browser
 - **Database:** Supabase Mumbai PostgreSQL (Active & Seeded).
 - **Media Storage:** Cloudflare R2 `tribal-heritage-videos` (Connected & Verified).
 - **Status:** **100% Complete, Fully Functional, and Ready for Public Launch!**
+
