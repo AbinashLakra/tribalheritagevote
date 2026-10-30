@@ -67,3 +67,4 @@ export function TribalRibbonBorder({ className = '', variant = 'light' }: Tribal
     </div>
   );
 }
+

@@ -6,12 +6,11 @@ import {
   ShieldCheck,
   Sparkles,
   MapPin,
-  Users,
   Vote,
   Shield,
   CheckCircle2,
   BarChart3,
-  Flame,
+  Calendar,
 } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { CountdownTimer } from '@/components/shared/CountdownTimer';
@@ -59,7 +58,7 @@ export default async function HomePage() {
 
   return (
     <div className="space-y-12 pb-20">
-      {/* ── HERO SECTION: 2-COLUMN DESIGN MATCHING USER'S SAMPLE (BLUE THEME) ── */}
+      {/* ── HERO SECTION: 2-COLUMN DESIGN (PROFESSIONAL ENGLISH & BLUE THEME) ── */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
           
@@ -71,20 +70,22 @@ export default async function HomePage() {
               <span>151ST BIRTH ANNIVERSARY • ROURKELA, ODISHA</span>
             </div>
 
-            {/* Bold Heading in Deep Blue (Replacing Maroon) */}
+            {/* Bold Heading in Deep Royal Blue */}
             <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-[#0f2d59] leading-[1.18] font-serif">
               DHARTI AABA VEER BIRSA MUNDA TRIBAL HERITAGE AWARDS 2026
             </h1>
 
-            {/* Cultural Intro Paragraphs */}
+            {/* Cultural Intro Paragraphs in English */}
             <div className="space-y-3 text-slate-700 text-sm sm:text-base leading-relaxed">
               <p>
-                Tribal culture, heritage aur traditional pride ko promote karne ke liye is vishesh
-                National Adivasi Cultural Showcase aur Online Voting Platform ka aayojan kiya ja raha hai.
+                Organized to honor the sacred memory of Dharti Aaba Veer Birsa Munda and preserve India&rsquo;s authentic
+                Adivasi traditions, this nationwide cultural showcase and digital voting platform celebrates indigenous
+                creativity, heritage pride, and folk artistic excellence.
               </p>
               <p>
-                Is platform ka maksad yuvaon aur karigaron ke dwara banaye gaye swadeshi attire, traditional folk dance,
-                ancestral songs, aur kala ko rashtriya sthar par samman dilana hai.
+                Our objective is to empower indigenous youth, master artisans, folk dancers, and vocalists by bringing
+                ancestral music, traditional handloom attire, sacred paintings, and heritage crafts to a national stage with
+                certified democratic recognition.
               </p>
             </div>
 
@@ -92,20 +93,20 @@ export default async function HomePage() {
             <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4 sm:p-5 space-y-3">
               <h3 className="text-sm font-bold text-[#0f2d59] uppercase tracking-wider flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-blue-600" />
-                Mission Points:
+                Key Mission Pillars:
               </h3>
               <ul className="space-y-2 text-xs sm:text-sm text-slate-700">
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-blue-700 shrink-0 mt-0.5" />
-                  <span>Traditional textile motifs, handloom aur tribal culture ko national runway aur digital stage par dikhana.</span>
+                  <span>Promoting traditional textile motifs, indigenous handloom, and tribal folk performing arts on a premier national showcase.</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-blue-700 shrink-0 mt-0.5" />
-                  <span>Fair &amp; democratic <strong>1 Mobile Number = 1 Verified Vote</strong> system through OTP authentication.</span>
+                  <span>Ensuring democratic integrity through a strict <strong>1 Verified Citizen Mobile = 1 Vote</strong> OTP authentication engine.</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-blue-700 shrink-0 mt-0.5" />
-                  <span>Digital check-in, auditable live results, graph leaderboards, aur authentic artist recognition.</span>
+                  <span>Providing tamper-evident digital auditing, real-time vote distribution graphs, and permanent honors for indigenous artists.</span>
                 </li>
               </ul>
             </div>
@@ -116,7 +117,7 @@ export default async function HomePage() {
                 href="/artists"
                 className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#0f2d59] hover:bg-blue-900 text-white font-bold text-sm shadow-md transition-all hover:scale-[1.01]"
               >
-                <span>Browse All Nominated Artists</span>
+                <span>Explore Nominated Artists</span>
                 <ArrowRight className="w-4 h-4" />
               </Link>
 
@@ -124,12 +125,12 @@ export default async function HomePage() {
                 href="/rules"
                 className="inline-flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold text-sm transition-colors"
               >
-                <span>Voting Rules &amp; FAQ</span>
+                <span>Voting Guidelines &amp; Rules</span>
               </Link>
             </div>
           </div>
 
-          {/* ── RIGHT COLUMN: 3 INTERACTIVE ACTION CARDS (MATCHING SCREENSHOT) ── */}
+          {/* ── RIGHT COLUMN: 3 INTERACTIVE ACTION CARDS (ENGLISH) ── */}
           <div className="lg:col-span-5 space-y-4">
             
             {/* CARD 1: NEW REGISTRATION (ARTIST NOMINATION) */}
@@ -141,7 +142,7 @@ export default async function HomePage() {
                 <span className="text-lg">✨</span>
               </div>
               <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                Traditional folk dance, tribal music, attire ya craft performance ke liye naya video nomination form bharein.
+                Adivasi artists, dancers, singers, and craftsmen can submit their official video nomination form for jury evaluation.
               </p>
               <Link
                 href="/artist/nomination"
@@ -152,7 +153,7 @@ export default async function HomePage() {
               </Link>
             </div>
 
-            {/* CARD 2: DELEGATE / CITIZEN VOTING (GOLD ACCENT FROM SCREENSHOT) */}
+            {/* CARD 2: DELEGATE / CITIZEN VOTING (GOLD ACCENT) */}
             <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm hover:shadow-md transition-all p-5 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold text-slate-900 tracking-wide uppercase">
@@ -161,7 +162,7 @@ export default async function HomePage() {
                 <span className="text-lg">🗳️</span>
               </div>
               <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                Artists ke videos dekhein, apna phone number verify karein aur 1 vote submit karke digital receipt prapt karein.
+                Watch approved artist showcases, verify your mobile number via OTP, and cast your verified vote with an instant digital receipt.
               </p>
               <Link
                 href="/artists"
@@ -172,7 +173,7 @@ export default async function HomePage() {
               </Link>
             </div>
 
-            {/* CARD 3: ADMIN LOGIN (NAVY DARK ACCENT FROM SCREENSHOT) */}
+            {/* CARD 3: ADMIN LOGIN (NAVY DARK ACCENT) */}
             <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm hover:shadow-md transition-all p-5 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold text-slate-900 tracking-wide uppercase">
@@ -181,7 +182,7 @@ export default async function HomePage() {
                 <span className="text-lg">🛡️</span>
               </div>
               <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                Contest timeline manage karein, video moderation approve karein aur live voting audit logs dekhein.
+                Authorized organizers: manage contest timelines, review video submissions, control re-opening windows, and inspect audit logs.
               </p>
               <Link
                 href="/admin"
@@ -209,8 +210,8 @@ export default async function HomePage() {
             </h2>
             <p className="text-xs sm:text-sm text-slate-600">
               {isVotingOpen
-                ? 'Apna vote aakhri tareekh se pehle dein. Strictly 1 verified citizen mobile = 1 vote.'
-                : 'Contest dates update ho rahi hain. Stay tuned.'}
+                ? 'Cast your official ballot before the deadline. Strictly 1 verified citizen mobile = 1 vote.'
+                : 'Contest dates are active. Check back for upcoming voting sessions.'}
             </p>
           </div>
 
@@ -231,7 +232,7 @@ export default async function HomePage() {
             Adivasi Folk &amp; Cultural Art Disciplines
           </h2>
           <p className="text-xs sm:text-sm text-slate-600">
-            India ke prathamik Adivasi sangeet, nritya, hastakala aur chitra kala ke masters.
+            Celebrating master practitioners across India&rsquo;s indigenous folk music, dance, handicrafts, and ancestral art forms.
           </p>
         </div>
 
@@ -272,7 +273,7 @@ export default async function HomePage() {
             </span>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-[#0f2d59]">Featured Adivasi Performers</h2>
             <p className="text-xs sm:text-sm text-slate-600 mt-1">
-              Watch videos and vote directly for the custodians of tribal heritage.
+              Watch performance showcases and vote directly for the authentic custodians of tribal heritage.
             </p>
           </div>
           <Link
@@ -344,7 +345,7 @@ export default async function HomePage() {
             <Award className="w-10 h-10 text-blue-900 mx-auto" />
             <h3 className="text-base font-bold text-slate-900">Nominations Verification In Progress</h3>
             <p className="text-xs sm:text-sm text-slate-600 max-w-md mx-auto">
-              Committee is reviewing uploaded performance videos. Approved entries will appear live here.
+              Our cultural review committee is currently moderating performance videos. Approved entries will appear live here.
             </p>
             <Link
               href="/artist/nomination"
@@ -356,7 +357,7 @@ export default async function HomePage() {
         )}
       </section>
 
-      {/* ── LIVE LEADERBOARD PREVIEW & TRUST BADGES ── */}
+      {/* ── LIVE LEADERBOARD PREVIEW & AUDITABLE TRANSPARENCY ── */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="bg-[#0f2d59] rounded-2xl text-white p-6 sm:p-10 shadow-lg relative overflow-hidden">
           <div className="relative z-10 grid grid-cols-1 md:grid-cols-3 gap-6 text-center md:text-left items-center">
@@ -368,8 +369,8 @@ export default async function HomePage() {
                 Live Leaderboard, Result Graphs &amp; Instant Verification
               </h3>
               <p className="text-xs sm:text-sm text-blue-200 leading-relaxed max-w-xl">
-                Contest ke doran aur result ke din real-time bar graphs aur podium ranking dekhein.
-                Agar admin special round ke liye portal dobara khole, toh live votes turant update hote hain.
+                Track live voting distribution graphs and certified rankings throughout the contest.
+                If organizers reopen the portal for special voting rounds, vote tallies update dynamically in real time.
               </p>
             </div>
 
