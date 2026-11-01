@@ -1,129 +1,116 @@
 /**
- * @file Art categories relevant to Adivasi/tribal art forms.
- * Defines a comprehensive taxonomy of traditional tribal art categories and sub-categories.
+ * @file Competition & Cultural Categories for Tribal Heritage Vote 2026.
+ * Official 8 Award Categories for Nagpuri and Regional Tribal Film & Music Awards.
  */
 
-/** Represents a sub-category within a main art category. */
 export interface ArtSubcategory {
-  /** Unique identifier */
   readonly id: string;
-  /** Display name */
   readonly name: string;
 }
 
-/** Represents a top-level tribal art category. */
 export interface ArtCategory {
-  /** Unique identifier */
   readonly id: string;
-  /** URL-safe slug */
   readonly slug: string;
-  /** Human-readable display name */
   readonly name: string;
-  /** Brief description of the category */
   readonly description: string;
-  /** List of sub-categories within this category */
   readonly subcategories: readonly ArtSubcategory[];
 }
 
-/**
- * All art categories relevant to Adivasi/tribal art forms across India.
- */
 export const ART_CATEGORIES: readonly ArtCategory[] = [
   {
-    id: 'cat_tribal_dance',
-    slug: 'tribal-dance',
-    name: 'Tribal Dance',
+    id: 'c1111111-1111-1111-1111-111111111111',
+    slug: 'best-music-video-nagpuri',
+    name: 'Best Music Video (Nagpuri)',
     description:
-      'Traditional dance forms passed down through generations across Adivasi communities, celebrating harvest, nature, and community life.',
+      'Honoring the finest visual storytelling, song production, and cultural presentation in Nagpuri music videos.',
     subcategories: [
-      { id: 'sub_santhali_dance', name: 'Santhali Dance' },
-      { id: 'sub_karma_dance', name: 'Karma Dance' },
-      { id: 'sub_chhau_dance', name: 'Chhau Dance' },
-      { id: 'sub_ho_dance', name: 'Ho Dance' },
-      { id: 'sub_bhumij_dance', name: 'Bhumij Dance' },
-      { id: 'sub_saora_dance', name: 'Saora Dance' },
+      { id: 'sub_nagpuri_mv_traditional', name: 'Traditional Nagpuri Music Video' },
+      { id: 'sub_nagpuri_mv_modern', name: 'Modern Tribal Fusion Music Video' },
     ],
   },
   {
-    id: 'cat_folk_music',
-    slug: 'folk-music-singing',
-    name: 'Folk Music & Singing',
+    id: 'c2222222-2222-2222-2222-222222222222',
+    slug: 'best-dance-in-video',
+    name: 'Best Dance in Video (Male / Female Leading Role)',
     description:
-      'Vocal and instrumental folk music traditions rooted in tribal storytelling, seasonal rituals, and communal gatherings.',
+      'Recognizing outstanding choreography execution, rhythm, and screen presence in lead performance roles.',
     subcategories: [
-      { id: 'sub_santhali_music', name: 'Santhali Music' },
-      { id: 'sub_ho_music', name: 'Ho Music' },
-      { id: 'sub_gond_music', name: 'Gond Music' },
-      { id: 'sub_bhil_music', name: 'Bhil Music' },
+      { id: 'sub_dance_male', name: 'Lead Dancer (Male)' },
+      { id: 'sub_dance_female', name: 'Lead Dancer (Female)' },
+      { id: 'sub_dance_duo', name: 'Lead Pair / Duo Dance' },
     ],
   },
   {
-    id: 'cat_traditional_painting',
-    slug: 'traditional-painting',
-    name: 'Traditional Painting',
+    id: 'c3333333-3333-3333-3333-333333333333',
+    slug: 'best-actor-leading-role',
+    name: 'Best Actor in a Leading Role (Male / Female)',
     description:
-      'Indigenous painting styles using natural pigments and traditional motifs depicting mythology, daily life, and nature.',
+      'Celebrating exceptional acting talent, emotional depth, and dramatic expression in leading roles.',
     subcategories: [
-      { id: 'sub_warli', name: 'Warli Painting' },
-      { id: 'sub_sohrai', name: 'Sohrai Painting' },
-      { id: 'sub_khovar', name: 'Khovar Painting' },
-      { id: 'sub_saura_painting', name: 'Saura Painting' },
-      { id: 'sub_gond_painting', name: 'Gond Painting' },
-      { id: 'sub_pithora', name: 'Pithora Painting' },
-      { id: 'sub_bhil_painting', name: 'Bhil Painting' },
+      { id: 'sub_actor_male', name: 'Lead Actor (Male)' },
+      { id: 'sub_actor_female', name: 'Lead Actor (Female)' },
     ],
   },
   {
-    id: 'cat_handicrafts_pottery',
-    slug: 'handicrafts-pottery',
-    name: 'Handicrafts & Pottery',
+    id: 'c4444444-4444-4444-4444-444444444444',
+    slug: 'best-singer',
+    name: 'Best Singer (Male / Female)',
     description:
-      'Hand-made crafts, metal work, pottery, and bamboo artistry using age-old techniques preserved within tribal communities.',
+      'Honoring outstanding vocal performance, tonality, and melody in regional recorded songs.',
     subcategories: [
-      { id: 'sub_dokra', name: 'Dokra Metal Craft' },
-      { id: 'sub_dhokra', name: 'Dhokra Casting' },
-      { id: 'sub_terracotta', name: 'Terracotta' },
-      { id: 'sub_bamboo_craft', name: 'Bamboo Craft' },
+      { id: 'sub_singer_male', name: 'Lead Vocalist (Male)' },
+      { id: 'sub_singer_female', name: 'Lead Vocalist (Female)' },
+      { id: 'sub_duet_vocals', name: 'Duet Vocal Performance' },
     ],
   },
   {
-    id: 'cat_tribal_instruments',
-    slug: 'tribal-instruments',
-    name: 'Tribal Instruments',
+    id: 'c5555555-5555-5555-5555-555555555555',
+    slug: 'best-camera-person',
+    name: 'Best Cinematographer / Camera Person (Male / Female)',
     description:
-      'Traditional musical instruments crafted and played by tribal artisans for ceremonial and cultural performances.',
+      'Recognizing excellence in visual camera framing, lighting composition, drone shots, and video cinematography.',
     subcategories: [
-      { id: 'sub_mandar', name: 'Mandar' },
-      { id: 'sub_tumdak', name: 'Tumdak' },
-      { id: 'sub_tamak', name: 'Tamak' },
-      { id: 'sub_bansuri', name: 'Bansuri' },
+      { id: 'sub_cinematography', name: 'Lead Cinematographer' },
+      { id: 'sub_camera_operator', name: 'Camera Operator / Drone Pilot' },
     ],
   },
   {
-    id: 'cat_performing_arts',
-    slug: 'performing-arts',
-    name: 'Performing Arts',
+    id: 'c6666666-6666-6666-6666-666666666666',
+    slug: 'best-director',
+    name: 'Best Director',
     description:
-      'Live performance traditions including street theatre, oral storytelling, and puppet shows that preserve tribal narratives.',
+      'Honoring exceptional creative vision, narrative storytelling, and direction in music videos.',
     subcategories: [
-      { id: 'sub_street_theatre', name: 'Street Theatre' },
-      { id: 'sub_storytelling', name: 'Storytelling' },
-      { id: 'sub_puppet_show', name: 'Puppet Show' },
+      { id: 'sub_direction_feature', name: 'Music Video Director' },
+      { id: 'sub_direction_debut', name: 'Emerging / Debut Director' },
+    ],
+  },
+  {
+    id: 'c7777777-7777-7777-7777-777777777777',
+    slug: 'best-choreographer',
+    name: 'Best Choreographer',
+    description:
+      'Celebrating original dance composition, rhythm synchronization, and choreography direction.',
+    subcategories: [
+      { id: 'sub_folk_choreography', name: 'Folk Choreography' },
+      { id: 'sub_fusion_choreography', name: 'Fusion & Modern Choreography' },
+    ],
+  },
+  {
+    id: 'c8888888-8888-8888-8888-888888888888',
+    slug: 'best-music-director',
+    name: 'Best Music Director',
+    description:
+      'Honoring outstanding musical composition, arrangement, background score, and sound design.',
+    subcategories: [
+      { id: 'sub_music_director_traditional', name: 'Traditional Music Direction' },
+      { id: 'sub_music_director_fusion', name: 'Contemporary Music Direction' },
     ],
   },
 ] as const;
 
 /**
  * Finds an art category by its URL-safe slug.
- *
- * @param slug - The slug to look up (e.g. `"tribal-dance"`)
- * @returns The matching {@link ArtCategory}, or `undefined` if not found
- *
- * @example
- * ```ts
- * const cat = getCategoryBySlug('warli-painting'); // undefined — slug is per category
- * const cat = getCategoryBySlug('traditional-painting'); // ArtCategory
- * ```
  */
 export function getCategoryBySlug(slug: string): ArtCategory | undefined {
   return ART_CATEGORIES.find((c) => c.slug === slug);

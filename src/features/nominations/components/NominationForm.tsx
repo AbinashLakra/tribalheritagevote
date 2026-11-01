@@ -542,7 +542,7 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
         {/* Art Category */}
         <div className="space-y-1">
           <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-            Cultural Art Category <span className="text-red-500">*</span>
+            Official Award Category <span className="text-red-500">*</span>
           </label>
           <select
             value={categoryId}
@@ -560,13 +560,13 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
         {/* Performance Title */}
         <div className="space-y-1">
           <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-            Performance Title <span className="text-red-500">*</span>
+            Nominated Title / Song Name <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. Traditional Karma Dance of Sundargarh"
+            placeholder="e.g. Tor Boli Re Tor Hansi (Nagpuri Music Video)"
             required
             className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
           />
@@ -575,13 +575,13 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
         {/* Cultural Description */}
         <div className="space-y-1">
           <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-            Performance Cultural Significance &amp; Story <span className="text-red-500">*</span>
+            Project Background &amp; Creative Credits <span className="text-red-500">*</span>
           </label>
           <textarea
             rows={3}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Describe the occasion, song lyrics, instruments used (e.g. Mandar, Dhol, Nagada), and ancestral meaning of this piece."
+            placeholder="Mention key contributors (Singer, Actor, Director, Choreographer, Cinematographer, Music Director) and cultural highlights of this release."
             required
             className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
           />

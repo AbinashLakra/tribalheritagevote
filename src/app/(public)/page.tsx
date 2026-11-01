@@ -226,31 +226,36 @@ export default async function HomePage() {
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
         <div className="text-center max-w-2xl mx-auto space-y-1.5">
           <span className="text-xs font-bold uppercase tracking-widest text-amber-600">
-            Heritage Categories
+            Official Award Categories (8 Categories)
           </span>
           <h2 className="text-2xl sm:text-3xl font-extrabold text-[#0f2d59]">
-            Adivasi Folk &amp; Cultural Art Disciplines
+            Nagpuri &amp; Tribal Performing Arts Awards
           </h2>
           <p className="text-xs sm:text-sm text-slate-600">
-            Celebrating master practitioners across India&rsquo;s indigenous folk music, dance, handicrafts, and ancestral art forms.
+            Recognizing excellence across 8 official award categories honoring music videos, lead actors, dancers, vocalists, directors, and creative technicians.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {ART_CATEGORIES.map((cat) => (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {ART_CATEGORIES.map((cat, idx) => (
             <Link
               key={cat.id}
               href={`/artists?category=${cat.slug}`}
               className="p-5 rounded-2xl bg-white border border-slate-200 hover:border-blue-700 hover:shadow-md transition-all group flex flex-col justify-between"
             >
               <div className="space-y-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-800 flex items-center justify-center font-bold text-base group-hover:bg-[#0f2d59] group-hover:text-white transition-colors">
-                  <Sparkles className="w-5 h-5 text-amber-500" />
+                <div className="flex items-center justify-between">
+                  <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-800 flex items-center justify-center font-bold text-sm group-hover:bg-[#0f2d59] group-hover:text-white transition-colors">
+                    <Sparkles className="w-4 h-4 text-amber-500" />
+                  </div>
+                  <span className="text-[11px] font-mono font-bold text-slate-400">
+                    #{idx + 1}
+                  </span>
                 </div>
-                <h3 className="text-base font-bold text-slate-900 group-hover:text-blue-900 transition-colors">
+                <h3 className="text-sm font-bold text-slate-900 group-hover:text-blue-900 transition-colors line-clamp-2">
                   {cat.name}
                 </h3>
-                <p className="text-xs text-slate-600 leading-relaxed">
+                <p className="text-[11px] text-slate-600 leading-relaxed line-clamp-3">
                   {cat.description}
                 </p>
               </div>
