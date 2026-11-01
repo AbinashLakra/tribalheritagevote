@@ -151,13 +151,35 @@ export async function sendOtpToPhone(rawPhone: string): Promise<SendSmsResult> {
     }
   }
 
-  // Gateway D: Development / Ready Sandbox Mode
+  // Gateway D: MSG91 OTP Gateway
+  const msg91AuthKey = process.env.MSG91_AUTH_KEY;
+  const msg91TemplateId = process.env.MSG91_TEMPLATE_ID;
+  if (msg91AuthKey && msg91TemplateId) {
+    try {
+      const res = await fetch(
+        `https://control.msg91.com/api/v5/otp?template_id=${msg91TemplateId}&mobile=91${phone}&authkey=${msg91AuthKey}&otp=${code}`,
+        { method: 'POST' }
+      );
+      const data = await res.json();
+      if (data.type === 'success') {
+        return {
+          success: true,
+          message: `OTP successfully sent to +91 ${phone} via MSG91.`,
+          gateway: 'msg91',
+        };
+      }
+    } catch (err: any) {
+      console.error('MSG91 delivery error:', err.message);
+    }
+  }
+
+  // Gateway E: Development / Sandbox Fallback Mode
   // If no external paid SMS gateway API key is configured yet in environment variables,
   // we return success and supply codePreview so testing is 100% functional immediately!
   return {
     success: true,
     message: `OTP code generated for +91 ${phone}. (Valid for 5 minutes).`,
-    gateway: 'live-generated',
+    gateway: 'sandbox',
     codePreview: code,
   };
 }
