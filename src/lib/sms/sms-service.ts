@@ -68,7 +68,7 @@ export async function sendOtpToPhone(rawPhone: string): Promise<SendSmsResult> {
 
   // 3. Dispatch SMS via configured Gateway
 
-  // Gateway A: Fast2SMS (Popular in India, Instant setup)
+  // Gateway A: Fast2SMS Quick SMS Route (India Instant Delivery)
   const fast2SmsKey = process.env.FAST2SMS_API_KEY;
   if (fast2SmsKey) {
     try {
@@ -79,8 +79,10 @@ export async function sendOtpToPhone(rawPhone: string): Promise<SendSmsResult> {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          route: 'otp',
-          variables_values: code,
+          route: 'q',
+          message: `Your Tribal Heritage Vote verification OTP is ${code}. Valid for 5 minutes.`,
+          language: 'english',
+          flash: 0,
           numbers: phone,
         }),
       });
@@ -88,11 +90,14 @@ export async function sendOtpToPhone(rawPhone: string): Promise<SendSmsResult> {
       if (data.return) {
         return {
           success: true,
-          message: `OTP successfully sent to +91 ${phone} via Fast2SMS.`,
+          message: `Real SMS OTP dispatched to +91 ${phone} via Fast2SMS.`,
           gateway: 'fast2sms',
         };
       } else {
-        console.warn('Fast2SMS returned failure:', data);
+        console.warn('Fast2SMS response:', data);
+        if (data.status_code === 999) {
+          console.warn('Fast2SMS notice: Complete one-time ₹100 wallet recharge to unlock direct API route.');
+        }
       }
     } catch (err: any) {
       console.error('Fast2SMS delivery error:', err.message);
