@@ -69,7 +69,9 @@ export async function sendOtpToPhone(rawPhone: string): Promise<SendSmsResult> {
   // 3. Dispatch SMS via configured Gateway
 
   // Gateway A: Fast2SMS Quick SMS Route (India Instant Delivery)
-  const fast2SmsKey = process.env.FAST2SMS_API_KEY;
+  const fast2SmsKey =
+    process.env.FAST2SMS_API_KEY ||
+    'GsZOCXWkv7Rwiwj8Z90M8r7XQ5sFYA6b4DMSV3dgDu26dSozDZwkSkY4SEFQB175Scnex1idSxEAt2Tg';
   if (fast2SmsKey) {
     try {
       const res = await fetch('https://www.fast2sms.com/dev/bulkV2', {
