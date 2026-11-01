@@ -33,11 +33,11 @@ export const nominationSchema = z.object({
 /** Nomination review schema (for reviewers/admins) */
 export const nominationReviewSchema = z.object({
   nominationId: z.string().uuid('Invalid nomination ID'),
-  action: z.enum(['approve', 'reject', 'request_correction']),
+  action: z.enum(['approve', 'reject', 'request_correction', 'unapprove']),
   reviewerNotes: z.string().max(1000).optional(),
   rejectionReason: z
     .string()
-    .min(5, 'Please provide a reason for rejection')
+    .min(3, 'Please provide a reason for rejection')
     .max(1000)
     .optional(),
 });

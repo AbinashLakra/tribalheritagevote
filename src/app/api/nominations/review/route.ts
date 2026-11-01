@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 5. Determine status and 3-strike disqualification rule
-    let targetStatus: 'approved' | 'rejected' | 'correction_required';
+    let targetStatus: 'approved' | 'rejected' | 'correction_required' | 'submitted';
     let newRejectionCount = targetNomination.rejection_count || 0;
     let isDisqualified = targetNomination.is_disqualified || false;
     let finalReason = rejectionReason || reviewerNotes || null;
@@ -110,6 +110,9 @@ export async function POST(request: NextRequest) {
     if (action === 'approve') {
       targetStatus = 'approved';
       finalReason = null;
+    } else if (action === 'unapprove') {
+      targetStatus = 'submitted';
+      finalReason = reviewerNotes || 'Nomination approval revoked by admin. Reverted to pending review queue.';
     } else {
       // Rejection or Request Correction counts as an evaluation attempt
       newRejectionCount += 1;
@@ -164,6 +167,8 @@ export async function POST(request: NextRequest) {
       ? `Nomination rejected and artist DISQUALIFIED (Reached 3/3 maximum strikes).`
       : action === 'approve'
       ? `Nomination approved! Now live for public voting.`
+      : action === 'unapprove'
+      ? `Nomination unapproved and reverted to pending review.`
       : `Nomination returned for correction (Strike ${newRejectionCount}/3). Feedback saved for artist.`;
 
     return NextResponse.json({

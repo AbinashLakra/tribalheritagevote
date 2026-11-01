@@ -299,6 +299,84 @@ export function AdminConsoleShell({ children }: { children: React.ReactNode }) {
             </div>
           </header>
 
+          {/* Main Admin Console Navigation Tabs (Visible on All Screen Sizes) */}
+          <nav className="bg-[#0f2d59] text-white px-4 sm:px-6 py-2.5 flex items-center gap-2 overflow-x-auto border-b border-blue-950 shadow-sm scrollbar-none">
+            {/* 1. Artist Video Nominations */}
+            {(isSuperAdmin || perms.can_moderate_videos) && (
+              <Link
+                href="/admin/nominations"
+                className={`px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 whitespace-nowrap transition-all ${
+                  pathname === '/admin/nominations'
+                    ? 'bg-amber-400 text-slate-950 shadow-md ring-2 ring-amber-300'
+                    : 'bg-white/10 hover:bg-white/20 text-white'
+                }`}
+              >
+                <Video className="w-4 h-4" />
+                <span>Artist Requests &amp; Videos</span>
+              </Link>
+            )}
+
+            {/* 2. Sub-Admin Requests & Roles */}
+            {(isSuperAdmin || perms.can_manage_admins) && (
+              <Link
+                href="/admin/access-requests"
+                className={`px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 whitespace-nowrap transition-all ${
+                  pathname === '/admin/access-requests'
+                    ? 'bg-amber-400 text-slate-950 shadow-md ring-2 ring-amber-300'
+                    : 'bg-white/10 hover:bg-white/20 text-white'
+                }`}
+              >
+                <UserCheck className="w-4 h-4" />
+                <span>Sub-Admin Requests &amp; Roles</span>
+              </Link>
+            )}
+
+            {/* 3. Contest Timeline & Lifecycle */}
+            {(isSuperAdmin || perms.can_manage_contest) && (
+              <Link
+                href="/admin/contest"
+                className={`px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 whitespace-nowrap transition-all ${
+                  pathname === '/admin/contest'
+                    ? 'bg-amber-400 text-slate-950 shadow-md ring-2 ring-amber-300'
+                    : 'bg-white/10 hover:bg-white/20 text-white'
+                }`}
+              >
+                <Calendar className="w-4 h-4" />
+                <span>Contest Timeline</span>
+              </Link>
+            )}
+
+            {/* 4. Security Audit Trail */}
+            {(isSuperAdmin || perms.can_view_audit_logs) && (
+              <Link
+                href="/admin/audit-logs"
+                className={`px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 whitespace-nowrap transition-all ${
+                  pathname === '/admin/audit-logs'
+                    ? 'bg-amber-400 text-slate-950 shadow-md ring-2 ring-amber-300'
+                    : 'bg-white/10 hover:bg-white/20 text-white'
+                }`}
+              >
+                <History className="w-4 h-4" />
+                <span>Audit Trail</span>
+              </Link>
+            )}
+
+            {/* 5. Executive Overview */}
+            {(isSuperAdmin || perms.can_view_analytics) && (
+              <Link
+                href="/admin"
+                className={`px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 whitespace-nowrap transition-all ${
+                  pathname === '/admin'
+                    ? 'bg-amber-400 text-slate-950 shadow-md ring-2 ring-amber-300'
+                    : 'bg-white/10 hover:bg-white/20 text-white'
+                }`}
+              >
+                <LayoutDashboard className="w-4 h-4" />
+                <span>Overview</span>
+              </Link>
+            )}
+          </nav>
+
           <main className="flex-1 p-5 sm:p-8 max-w-7xl w-full mx-auto">
             {children}
           </main>

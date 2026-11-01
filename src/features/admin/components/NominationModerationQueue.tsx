@@ -119,7 +119,7 @@ export function NominationModerationQueue({
     });
   }, [items, panelFilter, statusFilter, searchQuery]);
 
-  const handleModeration = async (action: 'approve' | 'reject' | 'request_correction') => {
+  const handleModeration = async (action: 'approve' | 'reject' | 'request_correction' | 'unapprove') => {
     if (!activeItem) return;
 
     if ((action === 'reject' || action === 'request_correction') && !actionNotes.trim()) {
@@ -565,29 +565,66 @@ export function NominationModerationQueue({
                   />
 
                   <div className="flex flex-wrap items-center gap-3 pt-1">
-                    {/* Approve Button */}
-                    <button
-                      onClick={() => handleModeration('approve')}
-                      disabled={isProcessing}
-                      className="flex-1 py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                    >
-                      {isProcessing ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <CheckCircle2 className="w-4 h-4" />
-                      )}
-                      <span>Approve Nomination (Live for Voting)</span>
-                    </button>
+                    {/* If NOT approved, show Approve Button */}
+                    {activeItem.status !== 'approved' && (
+                      <button
+                        onClick={() => handleModeration('approve')}
+                        disabled={isProcessing}
+                        className="flex-1 py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        {isProcessing ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="w-4 h-4" />
+                        )}
+                        <span>Approve Nomination (Live for Voting)</span>
+                      </button>
+                    )}
+
+                    {/* If ALREADY approved, show Unapprove Button */}
+                    {activeItem.status === 'approved' && (
+                      <button
+                        onClick={() => handleModeration('unapprove')}
+                        disabled={isProcessing}
+                        className="flex-1 py-3 px-4 rounded-2xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        {isProcessing ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <AlertTriangle className="w-4 h-4" />
+                        )}
+                        <span>Unapprove (Remove from Public Voting)</span>
+                      </button>
+                    )}
 
                     {/* Reject with Feedback / 3-Strikes */}
-                    <button
-                      onClick={() => handleModeration('request_correction')}
-                      disabled={isProcessing}
-                      className="py-3 px-4 rounded-2xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                    >
-                      <XCircle className="w-4 h-4" />
-                      <span>Reject &amp; Add Strike ({activeItem.rejection_count || 0}/3)</span>
-                    </button>
+                    {activeItem.status !== 'rejected' && (
+                      <button
+                        onClick={() => handleModeration('request_correction')}
+                        disabled={isProcessing}
+                        className="py-3 px-4 rounded-2xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-extrabold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        <XCircle className="w-4 h-4 text-red-600" />
+                        <span>Reject / Request Correction ({activeItem.rejection_count || 0}/3)</span>
+                      </button>
+                    )}
+
+                    {/* Prominent Super Admin Delete from Database Button */}
+                    {sessionRole === 'super_admin' && (
+                      <button
+                        onClick={() =>
+                          handleDeletePermanent(
+                            activeItem.id,
+                            activeItem.artist?.stage_name || activeItem.artist?.full_name || 'Artist'
+                          )
+                        }
+                        disabled={isProcessing}
+                        className="py-3 px-4 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        <span>Delete From Database</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
