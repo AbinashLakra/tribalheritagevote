@@ -6,8 +6,8 @@
 // Size limits
 // ---------------------------------------------------------------------------
 
-/** Maximum video file size in bytes (250 MB). */
-export const MAX_VIDEO_SIZE_BYTES: number = 250 * 1024 * 1024;
+/** Maximum video file size in bytes (100 MB). */
+export const MAX_VIDEO_SIZE_BYTES: number = 100 * 1024 * 1024;
 
 /** Maximum image file size in bytes (5 MB). */
 export const MAX_IMAGE_SIZE_BYTES: number = 5 * 1024 * 1024;
@@ -89,7 +89,7 @@ export function isAllowedImageType(mimeType: string): boolean {
  * @example
  * ```ts
  * isFileSizeValid(1_000_000, 'image'); // true  (1 MB < 5 MB)
- * isFileSizeValid(300_000_000, 'video'); // false (300 MB > 250 MB)
+ * isFileSizeValid(300_000_000, 'video'); // false (300 MB > 100 MB)
  * ```
  */
 export function isFileSizeValid(

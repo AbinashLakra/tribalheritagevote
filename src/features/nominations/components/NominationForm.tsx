@@ -41,7 +41,7 @@ const CHUNK_SIZE = 3.5 * 1024 * 1024; // 3.5 MB per chunk
 
 // Video & Performance Submission Constraints
 const MIN_VIDEO_BYTES = 50 * 1024; // 50 KB
-const MAX_VIDEO_BYTES = 250 * 1024 * 1024; // 250 MB
+const MAX_VIDEO_BYTES = 100 * 1024 * 1024; // 100 MB
 const MAX_DURATION_SEC = 600; // 10 minutes
 const MIN_WORDS = 5; // Minimum 5 words for description
 const MAX_WORDS = 1000;
@@ -217,12 +217,12 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
       return;
     }
 
-    // 2. Size check (Up to 250 MB)
+    // 2. Size check (Up to 100 MB)
     const sizeBytes = selectedFile.size;
     const sizeMB = sizeBytes / (1024 * 1024);
     if (sizeBytes < MIN_VIDEO_BYTES || sizeBytes > MAX_VIDEO_BYTES) {
       setError(
-        `Video size must be under 250 MB. Your selected file is ${sizeMB.toFixed(2)} MB.`
+        `Video size must be under 100 MB. Your selected file is ${sizeMB.toFixed(2)} MB.`
       );
       return;
     }
@@ -326,7 +326,7 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
 
     if (file.size < MIN_VIDEO_BYTES || file.size > MAX_VIDEO_BYTES) {
       setError(
-        `Video size must be under 250 MB (Current: ${(file.size / (1024 * 1024)).toFixed(2)} MB).`
+        `Video size must be under 100 MB (Current: ${(file.size / (1024 * 1024)).toFixed(2)} MB).`
       );
       return;
     }
@@ -833,7 +833,7 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
         </div>
       </div>
 
-      {/* SECTION 3: VIDEO UPLOAD (UP TO 250 MB) */}
+      {/* SECTION 3: VIDEO UPLOAD (UP TO 100 MB) */}
       <div className="space-y-5">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
@@ -841,7 +841,7 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
           </div>
           <div>
             <h3 className="text-base sm:text-lg font-extrabold text-slate-900">
-              3. Performance Video Upload (MP4, WebM, MOV • Up to 250 MB)
+              3. Performance Video Upload (MP4, WebM, MOV • Up to 100 MB)
             </h3>
             <p className="text-xs text-slate-500">
               Upload your video recording directly to secure storage for jury review and public voting.
@@ -868,7 +868,7 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
                 Click here to browse your video file
               </p>
               <p className="text-xs text-slate-500">
-                Format: MP4, WebM, MOV • Size: Any size up to 250 MB
+                Format: MP4, WebM, MOV • Size: Any size up to 100 MB
               </p>
             </div>
 

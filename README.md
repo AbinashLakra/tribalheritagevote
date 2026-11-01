@@ -9,7 +9,7 @@
 - **Public Showcase & Live Voting**: High-definition video showcase with categories across tribal dance (Santhali, Karma, Chhau), folk vocals, Sohrai/Khovar painting, and indigenous handicrafts.
 - **Strict One-Vote-Per-Citizen Rule**: Enforced at the PostgreSQL database level using `UNIQUE (contest_id, voter_id)` and atomic RPC functions with rate limiting and salted IP/UA hashing.
 - **Phone OTP Verification**: Built with Supabase Auth supporting standard Indian mobile numbers (+91) with encrypted phone hashing for citizen privacy.
-- **Direct-to-R2 Video Storage**: Server-controlled presigned URLs streaming media directly to Cloudflare R2 up to 250MB, bypassing serverless payload limits.
+- **Direct-to-R2 Video Storage**: Server-controlled presigned URLs streaming media directly to Cloudflare R2 up to 100MB, bypassing serverless payload limits.
 - **Contest Lifecycle Management**: Administrator control panel supporting states (`draft`, `scheduled`, `open`, `paused`, `closed`, `finalized`) with auditable reopening policies.
 - **Jury Moderation Queue**: Dedicated video moderation interface for the cultural evaluation committee with approval, rejection, and correction workflows.
 - **Transparent Public Leaderboard**: Real-time ranking with category filters and visibility controls (`live`, `hidden`, `delayed`).

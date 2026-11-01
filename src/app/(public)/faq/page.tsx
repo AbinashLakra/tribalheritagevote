@@ -24,7 +24,7 @@ const FAQS = [
   },
   {
     q: 'What video formats and file sizes are supported for nominations?',
-    a: 'We accept MP4, WebM, and QuickTime (MOV) formats up to 250MB. Files are uploaded directly to Cloudflare R2 storage for high performance.',
+    a: 'We accept MP4, WebM, and QuickTime (MOV) formats up to 100MB. Files are uploaded directly to Cloudflare R2 storage for high performance.',
   },
   {
     q: 'Why is my nomination marked "Under Review"?',

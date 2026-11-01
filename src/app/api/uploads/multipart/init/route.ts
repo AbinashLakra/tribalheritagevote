@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
 
     if (!isFileSizeValid(fileSizeBytes, 'video')) {
       return NextResponse.json(
-        { success: false, error: 'Video size exceeds the maximum allowed limit of 250 MB.' },
+        { success: false, error: 'Video size exceeds the maximum allowed limit of 100 MB.' },
         { status: 400 }
       );
     }
