@@ -39,13 +39,12 @@ interface NominationFormProps {
 
 const CHUNK_SIZE = 3.5 * 1024 * 1024; // 3.5 MB per chunk
 
-// Official Criteria Constraints
-const MIN_VIDEO_BYTES = 15 * 1024 * 1024; // 15 MB
-const MAX_VIDEO_BYTES = 20 * 1024 * 1024; // 20 MB
-const MIN_DURATION_SEC = 30;
-const MAX_DURATION_SEC = 40;
-const MIN_WORDS = 300;
-const MAX_WORDS = 500;
+// Video & Performance Submission Constraints
+const MIN_VIDEO_BYTES = 50 * 1024; // 50 KB
+const MAX_VIDEO_BYTES = 250 * 1024 * 1024; // 250 MB
+const MAX_DURATION_SEC = 600; // 10 minutes
+const MIN_WORDS = 5; // Minimum 5 words for description
+const MAX_WORDS = 1000;
 
 export function NominationForm({ contestId, categories, onComplete }: NominationFormProps) {
   // Artist Profile Information
@@ -183,7 +182,7 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
     }
   };
 
-  // Video File Selection & Strict Validation
+  // Video File Selection & Flexible Validation
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
@@ -197,17 +196,17 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
       return;
     }
 
-    // 2. Strict Size check (15 MB to 20 MB)
+    // 2. Size check (Up to 250 MB)
     const sizeBytes = selectedFile.size;
     const sizeMB = sizeBytes / (1024 * 1024);
     if (sizeBytes < MIN_VIDEO_BYTES || sizeBytes > MAX_VIDEO_BYTES) {
       setError(
-        `Video size must be strictly between 15 MB and 20 MB. Your selected file is ${sizeMB.toFixed(2)} MB.`
+        `Video size must be under 250 MB. Your selected file is ${sizeMB.toFixed(2)} MB.`
       );
       return;
     }
 
-    // 3. Strict Duration check (30s to 40s) via HTML5 Video metadata
+    // 3. Duration check via HTML5 Video metadata
     const objectUrl = URL.createObjectURL(selectedFile);
     const tempVideo = document.createElement('video');
     tempVideo.preload = 'metadata';
@@ -217,9 +216,9 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
       const dur = Math.round(tempVideo.duration);
       setDetectedDuration(dur);
 
-      if (dur < MIN_DURATION_SEC || dur > MAX_DURATION_SEC) {
+      if (dur > MAX_DURATION_SEC) {
         setError(
-          `Video time length must be between 30 seconds and 40 seconds. Detected duration is ${dur} seconds.`
+          `Video time length exceeds maximum allowed duration of 10 minutes. Detected duration is ${dur} seconds.`
         );
       }
     };
@@ -255,10 +254,10 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
       return;
     }
 
-    // Word Count Validation (300 to 500 words)
+    // Word Count Validation (Minimum 5 words)
     if (wordCount < MIN_WORDS || wordCount > MAX_WORDS) {
       setError(
-        `Performance description must be strictly between 300 and 500 words (Current word count: ${wordCount}).`
+        `Performance description should be at least ${MIN_WORDS} words (Current word count: ${wordCount}).`
       );
       return;
     }
@@ -271,26 +270,26 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
 
     if (file.size < MIN_VIDEO_BYTES || file.size > MAX_VIDEO_BYTES) {
       setError(
-        `Video size must be between 15 MB and 20 MB (Current: ${(file.size / (1024 * 1024)).toFixed(2)} MB).`
+        `Video size must be under 250 MB (Current: ${(file.size / (1024 * 1024)).toFixed(2)} MB).`
       );
       return;
     }
 
-    if (detectedDuration && (detectedDuration < MIN_DURATION_SEC || detectedDuration > MAX_DURATION_SEC)) {
+    if (detectedDuration && detectedDuration > MAX_DURATION_SEC) {
       setError(
-        `Video duration must be between 30 and 40 seconds (Detected: ${detectedDuration}s).`
+        `Video duration exceeds maximum allowed length of 10 minutes (Detected: ${detectedDuration}s).`
       );
       return;
     }
 
     setIsUploading(true);
     setUploadProgress(0);
-    setUploadStatusText('Connecting to Cloudflare R2 storage...');
+    setUploadStatusText('Connecting to storage...');
 
     try {
       const selectedCategory = categories.find((c) => c.id === categoryId);
 
-      // STEP 1: INITIALIZE MULTIPART UPLOAD ON CLOUDFLARE R2
+      // STEP 1: INITIALIZE UPLOAD SESSION IN DATABASE
       const initRes = await fetch('/api/uploads/multipart/init', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -320,24 +319,17 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
       }
 
       const { uploadId, objectKey, uploadRecordId, artistProfileId } = initData;
+      let finalPublicUrl = previewUrl || '';
 
-      // STEP 2: UPLOAD CHUNKS RESILIENTLY (3.5MB SLICES)
-      const totalBytes = file.size;
-      const totalParts = Math.ceil(totalBytes / CHUNK_SIZE);
-      const uploadedParts: Array<{ partNumber: number; etag: string }> = [];
-
-      for (let partNumber = 1; partNumber <= totalParts; partNumber++) {
-        const start = (partNumber - 1) * CHUNK_SIZE;
-        const end = Math.min(start + CHUNK_SIZE, totalBytes);
-        const chunkBlob = file.slice(start, end, file.type);
-
-        setUploadStatusText(`Uploading video chunk ${partNumber} of ${totalParts} to Cloudflare R2...`);
-
+      // STEP 2: HYBRID STORAGE DISPATCH
+      if (file.size <= 4 * 1024 * 1024) {
+        // Under 4MB: Single part direct upload to R2 via server route
+        setUploadStatusText('Uploading performance video to storage...');
         const chunkFormData = new FormData();
         chunkFormData.append('uploadId', uploadId);
         chunkFormData.append('objectKey', objectKey);
-        chunkFormData.append('partNumber', partNumber.toString());
-        chunkFormData.append('chunk', chunkBlob, file.name);
+        chunkFormData.append('partNumber', '1');
+        chunkFormData.append('chunk', file, file.name);
 
         const partRes = await fetch('/api/uploads/multipart/part', {
           method: 'POST',
@@ -346,34 +338,65 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
 
         const partData = await partRes.json();
         if (!partRes.ok || !partData.success) {
-          throw new Error(partData.error || `Failed to upload chunk ${partNumber} of ${totalParts}.`);
+          throw new Error(partData.error || 'Failed to upload video data.');
         }
 
-        uploadedParts.push({
-          partNumber,
-          etag: partData.etag,
+        setUploadProgress(75);
+        setUploadStatusText('Finalizing video storage checksum...');
+
+        const completeRes = await fetch('/api/uploads/multipart/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            uploadId,
+            objectKey,
+            uploadRecordId,
+            parts: [{ partNumber: 1, etag: partData.etag }],
+          }),
         });
 
-        const progressPercent = Math.round((partNumber / totalParts) * 90);
-        setUploadProgress(progressPercent);
-      }
+        const completeData = await completeRes.json();
+        if (!completeRes.ok || !completeData.success) {
+          throw new Error(completeData.error || 'Failed to complete video storage upload.');
+        }
+        finalPublicUrl = completeData.publicUrl || finalPublicUrl;
+      } else {
+        // Files > 4MB: Direct upload to Supabase Storage bucket (handles up to 50MB with native CORS)
+        setUploadStatusText('Uploading video to secure storage...');
+        const { createClient } = await import('@/lib/supabase/browser');
+        const supabase = createClient();
+        const cleanContestId = contestId || 'a1111111-1111-1111-1111-111111111111';
+        const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const storagePath = `nominations/${cleanContestId}/${artistProfileId}/${Date.now()}-${sanitizedName}`;
 
-      // STEP 3: FINALIZE MULTIPART UPLOAD ON CLOUDFLARE R2
-      setUploadStatusText('Verifying video checksum and finalizing Cloudflare storage...');
-      const completeRes = await fetch('/api/uploads/multipart/complete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          uploadId,
-          objectKey,
-          uploadRecordId,
-          parts: uploadedParts,
-        }),
-      });
+        const { error: uploadErr } = await supabase.storage
+          .from('nomination-videos')
+          .upload(storagePath, file, {
+            contentType: file.type || 'video/mp4',
+            upsert: true,
+          });
 
-      const completeData = await completeRes.json();
-      if (!completeRes.ok || !completeData.success) {
-        throw new Error(completeData.error || 'Failed to complete video storage upload.');
+        if (uploadErr) {
+          throw new Error('Video storage upload failed: ' + uploadErr.message);
+        }
+
+        const { data: publicUrlData } = supabase.storage
+          .from('nomination-videos')
+          .getPublicUrl(storagePath);
+
+        finalPublicUrl = publicUrlData.publicUrl;
+
+        // Finalize upload record with verified public URL
+        setUploadProgress(85);
+        setUploadStatusText('Verifying video storage...');
+        await fetch('/api/uploads/multipart/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            uploadRecordId,
+            directUrl: finalPublicUrl,
+          }),
+        });
       }
 
       setUploadProgress(95);
@@ -415,7 +438,7 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
         nominationId: nomData.nominationId,
         title: title.trim(),
         artistName: stageName.trim() || fullName.trim(),
-        videoUrl: completeData.publicUrl || previewUrl || undefined,
+        videoUrl: finalPublicUrl,
       });
 
       onComplete?.();
@@ -681,10 +704,10 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
           </div>
           <div>
             <h3 className="text-base sm:text-lg font-extrabold text-slate-900">
-              2. Award Category &amp; Video Description (300-500 Words)
+              2. Award Category &amp; Video Description
             </h3>
             <p className="text-xs text-slate-500">
-              Select one of the 8 award categories and write a detailed cultural background description (300-500 words).
+              Select one of the 8 award categories and share a brief cultural background description.
             </p>
           </div>
         </div>
@@ -725,31 +748,31 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label className="block text-xs font-bold text-slate-700">
-                Cultural Performance Description (300 to 500 words) <span className="text-red-500">*</span>
+                Cultural Performance Description (Minimum 5 words) <span className="text-red-500">*</span>
               </label>
               <span
                 className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                  wordCount >= MIN_WORDS && wordCount <= MAX_WORDS
+                  wordCount >= MIN_WORDS
                     ? 'bg-emerald-100 text-emerald-800'
                     : 'bg-amber-100 text-amber-800'
                 }`}
               >
-                {wordCount} / {MIN_WORDS}-{MAX_WORDS} words
+                {wordCount} {wordCount === 1 ? 'word' : 'words'} (min {MIN_WORDS})
               </span>
             </div>
             <textarea
-              rows={6}
+              rows={4}
               required
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe the musical composition, cultural folklore, instruments utilized (Mandar, Dhol, Nagara), costumes, lyrical theme, and performance tradition (Between 300 and 500 words)..."
+              placeholder="Describe the musical composition, cultural folklore, instruments utilized (Mandar, Dhol, Nagara), costumes, lyrical theme, or performance tradition..."
               className="w-full p-3 rounded-2xl border border-slate-300 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 leading-relaxed"
             />
           </div>
         </div>
       </div>
 
-      {/* SECTION 3: CLOUDFLARE R2 VIDEO UPLOAD WITH STRICT LIMITS */}
+      {/* SECTION 3: VIDEO UPLOAD (UP TO 250 MB) */}
       <div className="space-y-5">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
@@ -757,10 +780,10 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
           </div>
           <div>
             <h3 className="text-base sm:text-lg font-extrabold text-slate-900">
-              3. Video Upload Criteria (30-40s • 15-20 MB)
+              3. Performance Video Upload (MP4, WebM, MOV • Up to 250 MB)
             </h3>
             <p className="text-xs text-slate-500">
-              Uploaded directly to Cloudflare R2 server. Strict criteria: 30-40 sec duration and 15-20 MB file size.
+              Upload your video recording directly to secure storage for jury review and public voting.
             </p>
           </div>
         </div>
@@ -784,7 +807,7 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
                 Click here to browse your video file
               </p>
               <p className="text-xs text-slate-500">
-                Format: MP4, WebM, MOV • Size: 15 MB - 20 MB • Length: 30s - 40s
+                Format: MP4, WebM, MOV • Size: Any size up to 250 MB
               </p>
             </div>
 

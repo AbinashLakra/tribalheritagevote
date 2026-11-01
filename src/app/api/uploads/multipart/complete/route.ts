@@ -8,7 +8,30 @@ import { createAdminClient } from '@/lib/supabase/admin';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { uploadId, objectKey, uploadRecordId, parts } = body;
+    const { uploadId, objectKey, uploadRecordId, parts, directUrl } = body;
+
+    // Handle direct uploaded storage URL (e.g. from direct storage upload)
+    if (directUrl && uploadRecordId) {
+      const admin = createAdminClient();
+      const { error: dbError } = await admin
+        .from('upload_records')
+        .update({
+          upload_status: 'verified',
+          public_url: directUrl,
+        })
+        .eq('id', uploadRecordId);
+
+      if (dbError) {
+        console.warn('Failed to update upload_record public_url:', dbError);
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: 'Performance video uploaded and verified successfully!',
+        uploadRecordId,
+        publicUrl: directUrl,
+      });
+    }
 
     if (!uploadId || !objectKey || !uploadRecordId || !Array.isArray(parts) || parts.length === 0) {
       return NextResponse.json(
