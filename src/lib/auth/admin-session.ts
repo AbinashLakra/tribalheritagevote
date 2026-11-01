@@ -89,14 +89,16 @@ export async function getAdminSession(): Promise<AdminSessionPayload | null> {
     return session;
   }
 
-  // Delegated Sub-Admin: Real-time dynamic sync with admin_access_requests
-  if (session.role === 'sub_admin' && (session.adminId || session.phone)) {
+  // Delegated Sub-Admin / Co-Admin / Panel Admin: Real-time dynamic sync with admin_access_requests
+  if (session.adminId || session.phone || session.email) {
     try {
       const admin = createAdminClient();
-      let query = admin.from('admin_access_requests').select('status, permissions');
+      let query = admin.from('admin_access_requests').select('status, permissions, role_type, assigned_panel');
 
       if (session.adminId) {
         query = query.eq('id', session.adminId);
+      } else if (session.email) {
+        query = query.eq('email', session.email);
       } else if (session.phone) {
         query = query.eq('phone', session.phone);
       }
@@ -110,6 +112,13 @@ export async function getAdminSession(): Promise<AdminSessionPayload | null> {
       // If Main Admin has revoked or rejected this sub-admin, lock them out immediately!
       if (record.status !== 'approved') {
         return null;
+      }
+
+      if (record.role_type) {
+        session.role = record.role_type as any;
+      }
+      if (record.assigned_panel !== undefined) {
+        session.assignedPanel = record.assigned_panel as any;
       }
 
       // Dynamically reflect any shifted permissions updated by Main Super Admin

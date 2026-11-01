@@ -4,11 +4,12 @@ import {
   signAdminSession,
   ADMIN_COOKIE_NAME,
   SUPER_ADMIN_PERMISSIONS,
+  CO_ADMIN_PERMISSIONS,
+  PANEL_ADMIN_PERMISSIONS,
   AdminPermissions,
   INACTIVITY_TIMEOUT_MS,
 } from '@/lib/auth/admin-session';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { verifyOtpCode } from '@/lib/sms/sms-service';
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,26 +17,41 @@ export async function POST(req: NextRequest) {
     const { type } = body;
 
     // ─────────────────────────────────────────────────────────────
-    // TYPE A: SUPER ADMIN (CONSTANT MASTER PASSWORD LOGIN)
+    // TYPE A: SUPER ADMIN (CONSTANT MASTER CREDENTIALS LOGIN)
+    // Username: Admin
+    // Password: Admin@6789$
     // ─────────────────────────────────────────────────────────────
     if (type === 'super_admin') {
       const { username, password } = body;
-      const expectedPassword = process.env.SUPER_ADMIN_PASSWORD || 'BirsaMunda@2026';
+      const expectedPassword = process.env.SUPER_ADMIN_PASSWORD || 'Admin@6789$';
 
-      if (!password || password !== expectedPassword) {
+      // Verify username (case-insensitive 'Admin' or 'superadmin')
+      const cleanUsername = (username || '').trim();
+      const isValidUsername =
+        cleanUsername.toLowerCase() === 'admin' ||
+        cleanUsername.toLowerCase() === 'superadmin';
+
+      if (!isValidUsername) {
         return NextResponse.json(
-          { success: false, error: 'Invalid Super Admin password. Please check your credentials.' },
+          { success: false, error: 'Invalid Super Admin username. Expected: Admin' },
           { status: 401 }
         );
       }
 
-      const adminName = username ? username.trim() : 'Chief Organizer';
+      if (!password || password !== expectedPassword) {
+        return NextResponse.json(
+          { success: false, error: 'Invalid Super Admin master password. Please verify your credentials.' },
+          { status: 401 }
+        );
+      }
+
+      const adminName = 'Super Admin';
       const now = Date.now();
 
       const sessionPayload = {
         role: 'super_admin' as const,
         adminId: 'super-admin-01',
-        username: username || 'superadmin',
+        username: 'Admin',
         name: adminName,
         permissions: SUPER_ADMIN_PERMISSIONS,
         loginAt: now,
@@ -50,12 +66,12 @@ export async function POST(req: NextRequest) {
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
         path: '/',
-        maxAge: Math.floor(INACTIVITY_TIMEOUT_MS / 1000) * 4, // Cookie life
+        maxAge: Math.floor(INACTIVITY_TIMEOUT_MS / 1000) * 4,
       });
 
       return NextResponse.json({
         success: true,
-        message: 'Super Admin authenticated successfully with full system privileges.',
+        message: 'Super Admin authenticated successfully with full master privileges.',
         session: {
           role: 'super_admin',
           name: adminName,
@@ -65,26 +81,26 @@ export async function POST(req: NextRequest) {
     }
 
     // ─────────────────────────────────────────────────────────────
-    // TYPE B: DELEGATED ADMIN / REQUESTER (PHONE + OTP LOGIN)
+    // TYPE B: DELEGATED SUB-ADMIN / PANEL ADMIN / CO-ADMIN
+    // Username: Email ID
+    // Password: Mobile Phone Number (No OTP required)
     // ─────────────────────────────────────────────────────────────
-    if (type === 'sub_admin') {
-      const { phone, otp } = body;
+    if (type === 'sub_admin' || type === 'panel_admin') {
+      const emailInput = (body.email || body.username || '').trim().toLowerCase();
+      const passwordInput = (body.password || '').trim();
 
-      if (!phone || !otp) {
+      if (!emailInput || !passwordInput) {
         return NextResponse.json(
-          { success: false, error: 'Both phone number and OTP are required for Sub-Admin login.' },
+          { success: false, error: 'Both Email ID (Username) and Mobile Phone Number (Password) are required.' },
           { status: 400 }
         );
       }
 
-      const cleanPhone = phone.replace(/\D/g, '').slice(-10);
-
-      // Verify dynamic OTP using SMS verification engine
-      const otpCheck = await verifyOtpCode(cleanPhone, otp);
-      if (!otpCheck.success) {
+      const cleanPasswordPhone = passwordInput.replace(/\D/g, '').slice(-10);
+      if (!cleanPasswordPhone || cleanPasswordPhone.length !== 10) {
         return NextResponse.json(
-          { success: false, error: otpCheck.message },
-          { status: 401 }
+          { success: false, error: 'Password must be your registered 10-digit Indian mobile number.' },
+          { status: 400 }
         );
       }
 
@@ -93,16 +109,28 @@ export async function POST(req: NextRequest) {
       const { data: request, error: dbError } = await admin
         .from('admin_access_requests')
         .select('*')
-        .or(`phone.eq.${cleanPhone},phone.eq.+91${cleanPhone}`)
+        .ilike('email', emailInput)
         .maybeSingle();
 
       if (dbError || !request) {
         return NextResponse.json(
           {
             success: false,
-            error: 'No admin access record found for this mobile number. Please submit an Admin Access Request first.',
+            error: 'No admin record found for this Email address. Please submit an Admin Access Request first.',
           },
           { status: 404 }
+        );
+      }
+
+      // Verify that password matches the registered phone number
+      const storedPhoneClean = request.phone.replace(/\D/g, '').slice(-10);
+      if (cleanPasswordPhone !== storedPhoneClean) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Incorrect password. For delegated admins, your password is your registered 10-digit mobile number.',
+          },
+          { status: 401 }
         );
       }
 
@@ -110,7 +138,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             success: false,
-            error: 'Your Admin Access Request is still PENDING approval from the Main Admin. You will be able to log in once approved.',
+            error: 'Your Admin Access Request is still PENDING approval from the Main Admin. Once approved, you can log in directly.',
           },
           { status: 403 }
         );
@@ -126,23 +154,32 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const grantedPermissions: AdminPermissions = {
-        can_moderate_videos: Boolean(request.permissions?.can_moderate_videos),
-        can_manage_contest: Boolean(request.permissions?.can_manage_contest),
-        can_view_audit_logs: Boolean(request.permissions?.can_view_audit_logs),
-        can_export_data: Boolean(request.permissions?.can_export_data),
-        can_view_analytics: Boolean(request.permissions?.can_view_analytics ?? true),
-        can_manage_admins: false, // Only super admin can manage admins
-      };
+      const roleType = (request.role_type as 'co_admin' | 'panel_admin') || 'panel_admin';
+      const assignedPanel = (request.assigned_panel as 1 | 2 | 3 | 4) || 1;
+
+      let grantedPermissions: AdminPermissions;
+      if (roleType === 'co_admin') {
+        grantedPermissions = CO_ADMIN_PERMISSIONS;
+      } else {
+        grantedPermissions = {
+          can_moderate_videos: Boolean(request.permissions?.can_moderate_videos ?? true),
+          can_manage_contest: false,
+          can_view_audit_logs: false,
+          can_export_data: false,
+          can_view_analytics: Boolean(request.permissions?.can_view_analytics ?? true),
+          can_manage_admins: false,
+        };
+      }
 
       const now = Date.now();
       const sessionPayload = {
-        role: 'sub_admin' as const,
+        role: roleType,
         adminId: request.id,
-        username: request.email || cleanPhone,
-        name: request.full_name || 'Staff Admin',
+        username: request.email,
+        name: request.full_name || 'Panel Admin',
         phone: request.phone,
         email: request.email,
+        assignedPanel: roleType === 'panel_admin' ? assignedPanel : null,
         permissions: grantedPermissions,
         loginAt: now,
         lastActive: now,
@@ -161,10 +198,12 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        message: 'Delegated Admin logged in successfully with assigned role permissions.',
+        message: `${request.full_name || 'Admin'} authenticated successfully!`,
         session: {
-          role: 'sub_admin',
+          role: roleType,
           name: request.full_name,
+          email: request.email,
+          assignedPanel: roleType === 'panel_admin' ? assignedPanel : null,
           permissions: grantedPermissions,
         },
       });
@@ -181,4 +220,3 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-

@@ -74,9 +74,11 @@ export async function POST(request: NextRequest) {
     if (rpcError) {
       const errorMsg = rpcError.message || '';
 
-      // Check for duplicate vote attempt
+      // Check for duplicate category vote attempt
       if (
+        errorMsg.includes('DUPLICATE_CATEGORY_VOTE') ||
         errorMsg.includes('DUPLICATE_VOTE') ||
+        errorMsg.includes('uq_contest_category_voter') ||
         errorMsg.includes('unique_violation') ||
         errorMsg.includes('23505')
       ) {
@@ -89,8 +91,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           {
             success: false,
-            error: 'You have already cast your vote in this contest. Each verified citizen is granted strictly one vote.',
-            code: 'DUPLICATE_VOTE',
+            error: 'You have already cast your vote in this award category. Each verified citizen must cast 1 vote in each of the 8 categories.',
+            code: 'DUPLICATE_CATEGORY_VOTE',
           },
           { status: 409 }
         );

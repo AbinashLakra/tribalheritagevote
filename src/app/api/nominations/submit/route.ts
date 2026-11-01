@@ -142,7 +142,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 5. Upsert nomination
+    // 5. Check if artist has existing nomination and check disqualification
+    const { data: existingNom } = await admin
+      .from('nominations')
+      .select('id, rejection_count, is_disqualified')
+      .eq('contest_id', contestId)
+      .eq('artist_profile_id', artistProfileId)
+      .maybeSingle();
+
+    if (existingNom?.is_disqualified) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Your nomination has been permanently disqualified after 3 failed evaluations and cannot be resubmitted.',
+        },
+        { status: 403 }
+      );
+    }
+
+    // 6. Upsert nomination
     const initialStatus = isDraft ? 'draft' : 'submitted';
     const submittedAt = isDraft ? null : new Date().toISOString();
 
@@ -157,6 +175,8 @@ export async function POST(request: NextRequest) {
           description: description.trim(),
           upload_record_id: uploadRecordId,
           status: initialStatus,
+          rejection_count: existingNom?.rejection_count || 0,
+          is_disqualified: false,
           submitted_at: submittedAt,
           updated_at: new Date().toISOString(),
         },

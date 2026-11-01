@@ -44,7 +44,7 @@ export async function PATCH(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { id, status, permissions } = body;
+    const { id, status, permissions, role_type, assigned_panel } = body;
 
     if (!id) {
       return NextResponse.json(
@@ -63,6 +63,14 @@ export async function PATCH(req: NextRequest) {
 
     if (status) {
       updatePayload.status = status;
+    }
+
+    if (role_type) {
+      updatePayload.role_type = role_type;
+    }
+
+    if (assigned_panel !== undefined) {
+      updatePayload.assigned_panel = assigned_panel;
     }
 
     if (permissions && typeof permissions === 'object') {

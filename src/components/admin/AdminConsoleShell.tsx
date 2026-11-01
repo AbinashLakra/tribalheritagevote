@@ -30,9 +30,12 @@ interface AdminPermissions {
 }
 
 interface AdminSessionData {
-  role: 'super_admin' | 'sub_admin';
+  role: 'super_admin' | 'co_admin' | 'panel_admin' | 'sub_admin';
   name: string;
   adminId: string;
+  assignedPanel?: 1 | 2 | 3 | 4 | null;
+  email?: string;
+  phone?: string;
   permissions: AdminPermissions;
 }
 
@@ -127,14 +130,32 @@ export function AdminConsoleShell({ children }: { children: React.ReactNode }) {
             {/* Authenticated User Profile Badge */}
             <div className="p-4 mx-3 my-3 rounded-xl bg-blue-900/40 border border-blue-800/60 space-y-1.5">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                  {isSuperAdmin ? 'Super Admin' : 'Sub-Admin'}
+                <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${
+                  isSuperAdmin
+                    ? 'bg-amber-400/20 text-amber-300 border-amber-400/30'
+                    : session?.role === 'co_admin'
+                    ? 'bg-purple-400/20 text-purple-300 border-purple-400/30'
+                    : 'bg-sky-400/20 text-sky-300 border-sky-400/30'
+                }`}>
+                  {isSuperAdmin
+                    ? 'Main Super Admin'
+                    : session?.role === 'co_admin'
+                    ? 'Co-Admin'
+                    : `Panel ${session?.assignedPanel || 1} Admin`}
                 </span>
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="Active Session" />
               </div>
               <p className="text-xs font-bold text-white truncate">
                 {session?.name || 'Administrator'}
               </p>
+              {session?.role === 'panel_admin' && (
+                <p className="text-[10px] text-amber-300/90 font-medium">
+                  {session.assignedPanel === 1 && 'Cat 1 & 2: Music Video & Dance'}
+                  {session.assignedPanel === 2 && 'Cat 3 & 4: Lead Actor & Singer'}
+                  {session.assignedPanel === 3 && 'Cat 5 & 6: Camera & Director'}
+                  {session.assignedPanel === 4 && 'Cat 7 & 8: Choreography & Music'}
+                </p>
+              )}
               <p className="text-[10px] text-blue-300/80">
                 Auto-logout on 15m inactivity
               </p>

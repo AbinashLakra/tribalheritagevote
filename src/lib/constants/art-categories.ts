@@ -115,3 +115,63 @@ export const ART_CATEGORIES: readonly ArtCategory[] = [
 export function getCategoryBySlug(slug: string): ArtCategory | undefined {
   return ART_CATEGORIES.find((c) => c.slug === slug);
 }
+
+export interface AdminPanelConfig {
+  readonly id: 1 | 2 | 3 | 4;
+  readonly name: string;
+  readonly shortName: string;
+  readonly categoryIds: readonly string[];
+  readonly description: string;
+}
+
+export const ADMIN_PANELS: readonly AdminPanelConfig[] = [
+  {
+    id: 1,
+    name: 'Panel 1: Music Video & Lead Dance',
+    shortName: 'Panel 1',
+    categoryIds: [
+      'c1111111-1111-1111-1111-111111111111', // Best Music Video (Nagpuri)
+      'c2222222-2222-2222-2222-222222222222', // Best Dance in Video (Male / Female Leading Role)
+    ],
+    description: 'Reviews and moderates Best Music Video (Nagpuri) and Best Dance in Video.',
+  },
+  {
+    id: 2,
+    name: 'Panel 2: Leading Actor & Lead Singer',
+    shortName: 'Panel 2',
+    categoryIds: [
+      'c3333333-3333-3333-3333-333333333333', // Best Actor in a Leading Role (Male / Female)
+      'c4444444-4444-4444-4444-444444444444', // Best Singer (Male / Female)
+    ],
+    description: 'Reviews and moderates Best Actor in a Leading Role and Best Singer.',
+  },
+  {
+    id: 3,
+    name: 'Panel 3: Cinematographer & Director',
+    shortName: 'Panel 3',
+    categoryIds: [
+      'c5555555-5555-5555-5555-555555555555', // Best Cinematographer / Camera Person (Male / Female)
+      'c6666666-6666-6666-6666-666666666666', // Best Director
+    ],
+    description: 'Reviews and moderates Best Cinematographer / Camera Person and Best Director.',
+  },
+  {
+    id: 4,
+    name: 'Panel 4: Choreographer & Music Director',
+    shortName: 'Panel 4',
+    categoryIds: [
+      'c7777777-7777-7777-7777-777777777777', // Best Choreographer
+      'c8888888-8888-8888-8888-888888888888', // Best Music Director
+    ],
+    description: 'Reviews and moderates Best Choreographer and Best Music Director.',
+  },
+] as const;
+
+export function getPanelByCategoryId(categoryId: string): AdminPanelConfig | undefined {
+  return ADMIN_PANELS.find((p) => p.categoryIds.includes(categoryId));
+}
+
+export function getPanelById(panelId: number): AdminPanelConfig | undefined {
+  return ADMIN_PANELS.find((p) => p.id === panelId);
+}
+

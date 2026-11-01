@@ -54,7 +54,7 @@ export function Navbar() {
 
             {/* Delegate / Voter Portal (Gold button from screenshot) */}
             <Link
-              href="/artists"
+              href="/vote"
               className="flex items-center gap-1.5 rounded-lg bg-[#b45309] hover:bg-[#92400e] text-white px-3.5 py-1.5 text-xs sm:text-sm font-bold shadow transition-all border border-amber-500/40"
             >
               <Vote className="h-4 w-4 text-amber-200" />
@@ -107,7 +107,7 @@ export function Navbar() {
             Home
           </Link>
           <Link
-            href="/artists"
+            href="/vote"
             onClick={() => setMobileMenuOpen(false)}
             className="flex items-center gap-2 p-2 rounded bg-[#b45309] text-white font-semibold"
           >

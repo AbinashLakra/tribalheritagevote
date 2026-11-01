@@ -23,6 +23,8 @@ export async function POST(req: NextRequest) {
       categoryName,
       experienceYears = 3,
       bio = '',
+      email: inputEmail,
+      avatarUrl,
     } = body;
 
     // 1. Basic Validations
@@ -119,6 +121,10 @@ export async function POST(req: NextRequest) {
           primary_category: categoryName || 'Tribal & Folk Performing Arts',
           experience_years: Number(experienceYears) || 3,
           verification_status: 'verified',
+          avatar_url: avatarUrl || null,
+          phone: cleanPhone,
+          email: inputEmail || email,
+          is_phone_verified: true,
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'user_id' }

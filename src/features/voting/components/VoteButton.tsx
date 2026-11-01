@@ -51,28 +51,8 @@ export function VoteButton({
     checkStatus();
   }, [contestId]);
 
-  const handleVoteClick = async () => {
-    setVoteError(null);
-    try {
-      // Check auth status
-      const res = await fetch(`/api/voting/status?contestId=${contestId}`);
-      const data = await res.json();
-
-      if (!data.success || !data.data.isAuthenticated || !data.data.isVerified) {
-        setShowPhoneModal(true);
-        return;
-      }
-
-      if (data.data.hasVoted) {
-        setHasVoted(true);
-        setVoteError('You have already cast your vote in this contest.');
-        return;
-      }
-
-      setShowConfirmModal(true);
-    } catch {
-      setShowPhoneModal(true);
-    }
+  const handleVoteClick = () => {
+    router.push(`/vote?artist=${nominationId}`);
   };
 
   const handlePhoneVerificationSuccess = () => {

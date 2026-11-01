@@ -11,12 +11,13 @@ export interface AdminPermissions {
 }
 
 export interface AdminSessionPayload {
-  role: 'super_admin' | 'sub_admin';
+  role: 'super_admin' | 'co_admin' | 'panel_admin' | 'sub_admin';
   adminId: string;
   username: string;
   name: string;
   phone?: string;
   email?: string;
+  assignedPanel?: 1 | 2 | 3 | 4 | null;
   permissions: AdminPermissions;
   loginAt: number;
   lastActive: number;
@@ -29,6 +30,24 @@ export const SUPER_ADMIN_PERMISSIONS: AdminPermissions = {
   can_export_data: true,
   can_view_analytics: true,
   can_manage_admins: true,
+};
+
+export const CO_ADMIN_PERMISSIONS: AdminPermissions = {
+  can_moderate_videos: true,
+  can_manage_contest: true,
+  can_view_audit_logs: true,
+  can_export_data: true,
+  can_view_analytics: true,
+  can_manage_admins: false, // Second Main Admin cannot manage or delete other admins
+};
+
+export const PANEL_ADMIN_PERMISSIONS: AdminPermissions = {
+  can_moderate_videos: true,
+  can_manage_contest: false,
+  can_view_audit_logs: false,
+  can_export_data: false,
+  can_view_analytics: true,
+  can_manage_admins: false,
 };
 
 export const ROLE_PRESETS = {
