@@ -34,12 +34,8 @@ export const nominationSchema = z.object({
 export const nominationReviewSchema = z.object({
   nominationId: z.string().uuid('Invalid nomination ID'),
   action: z.enum(['approve', 'reject', 'request_correction', 'unapprove']),
-  reviewerNotes: z.string().max(1000).optional(),
-  rejectionReason: z
-    .string()
-    .min(3, 'Please provide a reason for rejection')
-    .max(1000)
-    .optional(),
+  reviewerNotes: z.string().max(1000).optional().or(z.literal('')).nullable(),
+  rejectionReason: z.string().max(1000).optional().or(z.literal('')).nullable(),
 });
 
 export type NominationInput = z.infer<typeof nominationSchema>;

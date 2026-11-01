@@ -69,6 +69,16 @@ export async function POST(request: NextRequest) {
     }
 
     const { nominationId, action, reviewerNotes, rejectionReason } = validation.data;
+    const cleanNotes = reviewerNotes?.trim() || null;
+    const cleanReason = rejectionReason?.trim() || null;
+
+    if ((action === 'reject' || action === 'request_correction') && !cleanReason && !cleanNotes) {
+      return NextResponse.json(
+        { success: false, error: 'Please provide a feedback reason for rejecting or requesting correction.' },
+        { status: 400 }
+      );
+    }
+
     const admin = createAdminClient();
 
     // 4. Fetch target nomination to verify category and panel eligibility
@@ -105,23 +115,25 @@ export async function POST(request: NextRequest) {
     let targetStatus: 'approved' | 'rejected' | 'correction_required' | 'submitted';
     let newRejectionCount = targetNomination.rejection_count || 0;
     let isDisqualified = targetNomination.is_disqualified || false;
-    let finalReason = rejectionReason || reviewerNotes || null;
+    let finalReason: string | null = cleanReason || cleanNotes || null;
 
     if (action === 'approve') {
       targetStatus = 'approved';
       finalReason = null;
     } else if (action === 'unapprove') {
       targetStatus = 'submitted';
-      finalReason = reviewerNotes || 'Nomination approval revoked by admin. Reverted to pending review queue.';
+      finalReason = cleanNotes || 'Nomination approval revoked by admin. Reverted to pending review queue.';
     } else {
       // Rejection or Request Correction counts as an evaluation attempt
       newRejectionCount += 1;
+      const feedback = cleanReason || cleanNotes || 'Jury requested correction';
       if (newRejectionCount >= 3) {
         isDisqualified = true;
         targetStatus = 'rejected';
-        finalReason = `${finalReason ? finalReason + ' | ' : ''}Permanently disqualified after 3 failed review attempts.`;
+        finalReason = `${feedback} | Permanently disqualified after 3 failed review attempts.`;
       } else {
         targetStatus = action === 'reject' ? 'rejected' : 'correction_required';
+        finalReason = feedback;
       }
     }
 
@@ -132,7 +144,7 @@ export async function POST(request: NextRequest) {
         status: targetStatus,
         rejection_count: newRejectionCount,
         is_disqualified: isDisqualified,
-        reviewer_notes: reviewerNotes || null,
+        reviewer_notes: cleanNotes,
         rejection_reason: finalReason,
         reviewed_at: new Date().toISOString(),
       })

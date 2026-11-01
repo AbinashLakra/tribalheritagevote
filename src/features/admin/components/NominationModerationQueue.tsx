@@ -122,7 +122,9 @@ export function NominationModerationQueue({
   const handleModeration = async (action: 'approve' | 'reject' | 'request_correction' | 'unapprove') => {
     if (!activeItem) return;
 
-    if ((action === 'reject' || action === 'request_correction') && !actionNotes.trim()) {
+    const trimmedNotes = actionNotes.trim();
+
+    if ((action === 'reject' || action === 'request_correction') && !trimmedNotes) {
       setErrorMsg('Please specify the rejection or correction feedback reason so the artist can see what to correct.');
       return;
     }
@@ -132,15 +134,28 @@ export function NominationModerationQueue({
     setSuccessMsg(null);
 
     try {
+      const payload: {
+        nominationId: string;
+        action: 'approve' | 'reject' | 'request_correction' | 'unapprove';
+        reviewerNotes?: string;
+        rejectionReason?: string;
+      } = {
+        nominationId: activeItem.id,
+        action,
+      };
+
+      if (trimmedNotes) {
+        payload.reviewerNotes = trimmedNotes;
+      }
+
+      if (action === 'reject' || action === 'request_correction') {
+        payload.rejectionReason = trimmedNotes;
+      }
+
       const res = await fetch('/api/nominations/review', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nominationId: activeItem.id,
-          action,
-          reviewerNotes: actionNotes.trim(),
-          rejectionReason: actionNotes.trim(),
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -159,7 +174,7 @@ export function NominationModerationQueue({
                 status: data.data.status,
                 rejection_count: data.data.rejection_count,
                 is_disqualified: data.data.is_disqualified,
-                rejection_reason: actionNotes.trim(),
+                rejection_reason: action === 'approve' ? null : (trimmedNotes || i.rejection_reason),
               }
             : i
         )
@@ -526,12 +541,12 @@ export function NominationModerationQueue({
                   </label>
                   <span
                     className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                      descriptionWordCount >= 300 && descriptionWordCount <= 500
+                      descriptionWordCount >= 5
                         ? 'bg-emerald-100 text-emerald-800'
                         : 'bg-amber-100 text-amber-800'
                     }`}
                   >
-                    {descriptionWordCount} words (Requirement: 300 - 500)
+                    {descriptionWordCount} words (Min 5 words)
                   </span>
                 </div>
                 <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs sm:text-sm text-slate-800 leading-relaxed max-h-48 overflow-y-auto">
