@@ -182,6 +182,27 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
     }
   };
 
+  // Auto-check phone verification status whenever 10 digits are present
+  const handlePhoneChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawVal = e.target.value;
+    setPhone(rawVal);
+    const clean = rawVal.replace(/\D/g, '').slice(-10);
+    if (clean.length === 10) {
+      try {
+        const res = await fetch(`/api/auth/otp/check-phone?phone=${clean}`);
+        const data = await res.json();
+        if (data.isVerified) {
+          setIsPhoneVerified(true);
+          setOtpNotice('Mobile number is already verified in our records.');
+        }
+      } catch {
+        // ignore network error
+      }
+    } else {
+      setIsPhoneVerified(false);
+    }
+  };
+
   // Video File Selection & Flexible Validation
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -233,24 +254,57 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
     setError(null);
 
     // Profile Validations
-    if (!fullName.trim() || !stageName.trim()) {
-      setError('Please provide your full legal name and stage/troupe name.');
+    if (!fullName.trim()) {
+      setError('Please provide your full legal name in Section 1.');
+      document.getElementById('input-full-name')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    if (!stageName.trim()) {
+      setError('Please provide your stage or troupe name in Section 1.');
+      document.getElementById('input-stage-name')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
 
     const cleanPhone = phone.replace(/\D/g, '').slice(-10);
     if (!cleanPhone || cleanPhone.length !== 10) {
       setError('Please provide a valid 10-digit Indian mobile number (+91).');
-      return;
-    }
-
-    if (!isPhoneVerified) {
-      setError('Please verify your mobile number via OTP before submitting your nomination.');
+      document.getElementById('input-phone')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
 
     if (!email.trim() || !email.includes('@')) {
       setError('Please provide a valid email address.');
+      document.getElementById('input-email')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    // Phone Verification Check
+    if (!isPhoneVerified) {
+      try {
+        const checkRes = await fetch(`/api/auth/otp/check-phone?phone=${cleanPhone}`);
+        const checkData = await checkRes.json();
+        if (checkData.isVerified) {
+          setIsPhoneVerified(true);
+        } else {
+          if (!otpSent) {
+            handleSendOtp();
+          }
+          setError(`Please verify your mobile number. A 6-digit OTP was dispatched to +91 ${cleanPhone}. Enter it in Section 1.`);
+          document.getElementById('otp-box')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return;
+        }
+      } catch {
+        setError('Please verify your mobile number via OTP before submitting your nomination.');
+        document.getElementById('otp-box')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+    }
+
+    // Performance Title Validation
+    if (!title.trim()) {
+      setError('Please provide a Performance Title in Section 2.');
+      document.getElementById('input-title')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
 
@@ -259,12 +313,14 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
       setError(
         `Performance description should be at least ${MIN_WORDS} words (Current word count: ${wordCount}).`
       );
+      document.getElementById('input-description')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
 
     // Video Criteria
     if (!file) {
-      setError('Please select an authentic cultural video recording to upload.');
+      setError('Please select an authentic cultural video recording to upload in Section 3.');
+      document.getElementById('video-upload-box')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
 
@@ -509,13 +565,13 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
   }
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden p-6 sm:p-10 space-y-8">
+    <form noValidate onSubmit={handleSubmit} className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden p-6 sm:p-10 space-y-8">
       {/* Alert Banner */}
       {error && (
         <div className="p-4 rounded-2xl bg-red-50 border border-red-300 text-red-900 text-xs sm:text-sm flex items-start gap-3 shadow-xs">
           <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
           <div className="space-y-1">
-            <p className="font-bold">Validation Issue:</p>
+            <p className="font-bold">Cannot Submit Nomination Yet:</p>
             <p className="leading-relaxed">{error}</p>
           </div>
         </div>
@@ -532,7 +588,7 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
               1. Artist Profile &amp; Mobile Verification
             </h3>
             <p className="text-xs text-slate-500">
-              Provide legal name, address, and verify mobile number via OTP. You remain verified until event results.
+              Provide legal name, address, and mobile number. Verified artists can submit nominations immediately.
             </p>
           </div>
         </div>
@@ -566,6 +622,7 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
               Full Legal Name <span className="text-red-500">*</span>
             </label>
             <input
+              id="input-full-name"
               type="text"
               required
               value={fullName}
@@ -580,6 +637,7 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
               Stage Name / Troupe <span className="text-red-500">*</span>
             </label>
             <input
+              id="input-stage-name"
               type="text"
               required
               value={stageName}
@@ -594,6 +652,7 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
               Email Address <span className="text-red-500">*</span>
             </label>
             <input
+              id="input-email"
               type="email"
               required
               value={email}
@@ -619,13 +678,13 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
 
             <div className="flex gap-2">
               <input
+                id="input-phone"
                 type="tel"
                 required
-                disabled={isPhoneVerified}
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={handlePhoneChange}
                 placeholder="10-digit number"
-                className="flex-1 p-2.5 rounded-xl border border-slate-300 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 disabled:bg-slate-100"
+                className="flex-1 p-2.5 rounded-xl border border-slate-300 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
               />
               {!isPhoneVerified && (
                 <button
@@ -642,7 +701,7 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
 
           {/* OTP Input Row */}
           {!isPhoneVerified && otpSent && (
-            <div className="sm:col-span-2 p-3.5 rounded-2xl bg-amber-50/80 border border-amber-300 space-y-2">
+            <div id="otp-box" className="sm:col-span-2 p-3.5 rounded-2xl bg-amber-50/80 border border-amber-300 space-y-2">
               <p className="text-xs text-amber-900 font-semibold">{otpNotice}</p>
               <div className="flex items-center gap-2">
                 <input
@@ -735,6 +794,7 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
               Performance Title <span className="text-red-500">*</span>
             </label>
             <input
+              id="input-title"
               type="text"
               required
               value={title}
@@ -761,6 +821,7 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
               </span>
             </div>
             <textarea
+              id="input-description"
               rows={4}
               required
               value={description}
@@ -789,7 +850,7 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
         </div>
 
         {/* Video Upload Box */}
-        <div className="border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-3xl p-6 sm:p-8 text-center transition-colors bg-slate-50/50">
+        <div id="video-upload-box" className="border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-3xl p-6 sm:p-8 text-center transition-colors bg-slate-50/50">
           <input
             type="file"
             id="video-upload"
@@ -843,6 +904,17 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
         {previewUrl && !isUploading && (
           <div className="max-w-md mx-auto rounded-2xl overflow-hidden border border-slate-300 aspect-video bg-black shadow-inner">
             <VideoPlayer src={previewUrl} title="Local Preview" />
+          </div>
+        )}
+
+        {/* Direct Error Display Above Submit Button */}
+        {error && (
+          <div className="p-4 rounded-2xl bg-red-50 border border-red-300 text-red-900 text-xs sm:text-sm flex items-start gap-3 shadow-xs">
+            <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+            <div className="space-y-1 flex-1">
+              <p className="font-bold">Required to Submit:</p>
+              <p className="leading-relaxed">{error}</p>
+            </div>
           </div>
         )}
 
