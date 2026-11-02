@@ -3,6 +3,9 @@ import { UploadPartCommand } from '@aws-sdk/client-s3';
 import { getR2Client } from '@/lib/r2/client';
 import { R2_BUCKET_NAME } from '@/config/r2';
 
+export const maxDuration = 120;
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
@@ -50,7 +53,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       partNumber,
-      etag: partResult.ETag,
+      etag: partResult.ETag.replace(/"/g, ''),
     });
   } catch (error: any) {
     console.error('Upload part error:', error);

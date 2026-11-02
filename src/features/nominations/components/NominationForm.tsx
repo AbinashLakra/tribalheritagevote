@@ -41,7 +41,61 @@ interface NominationFormProps {
   onComplete?: () => void;
 }
 
-const CHUNK_SIZE = 3.5 * 1024 * 1024; // 3.5 MB per chunk
+// Upload chunk size: 5 MB per part (Standard AWS S3 / Cloudflare R2 minimum part size)
+const UPLOAD_CHUNK_SIZE = 5 * 1024 * 1024;
+
+/**
+ * Uploads a single multipart chunk via XMLHttpRequest with live progress reporting.
+ */
+function uploadChunkViaXHR(
+  formData: FormData,
+  onProgress: (loaded: number, total: number) => void
+): Promise<{ success: boolean; partNumber: number; etag: string }> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/uploads/multipart/part');
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        onProgress(event.loaded, event.total);
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const res = JSON.parse(xhr.responseText);
+          if (res.success && res.etag) {
+            resolve(res);
+          } else {
+            reject(new Error(res.error || 'Server rejected part upload.'));
+          }
+        } catch {
+          reject(new Error('Malformed response from upload server.'));
+        }
+      } else {
+        try {
+          const res = JSON.parse(xhr.responseText);
+          reject(new Error(res.error || `Server returned error ${xhr.status}`));
+        } catch {
+          reject(new Error(`Server returned error ${xhr.status}`));
+        }
+      }
+    };
+
+    xhr.onerror = () => {
+      reject(new Error('Network connection error while uploading video chunk.'));
+    };
+
+    xhr.ontimeout = () => {
+      reject(new Error('Upload chunk timed out. Please check your internet connection.'));
+    };
+
+    // 120 seconds timeout per chunk
+    xhr.timeout = 120000;
+    xhr.send(formData);
+  });
+}
 
 // Video & Performance Submission Constraints (Strict Contest Rules)
 const MIN_VIDEO_BYTES = 50 * 1024; // 50 KB
@@ -459,83 +513,92 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
       const { uploadId, objectKey, uploadRecordId, artistProfileId } = initData;
       let finalPublicUrl = previewUrl || '';
 
-      // STEP 2: HYBRID STORAGE DISPATCH
-      if (file.size <= 4 * 1024 * 1024) {
-        // Under 4MB: Single part direct upload to R2 via server route
-        setUploadStatusText('Uploading performance video to storage...');
-        const chunkFormData = new FormData();
-        chunkFormData.append('uploadId', uploadId);
-        chunkFormData.append('objectKey', objectKey);
-        chunkFormData.append('partNumber', '1');
-        chunkFormData.append('chunk', file, file.name);
+      // STEP 2: CLOUDFLARE R2 MULTIPART CHUNKED UPLOAD WITH LIVE PROGRESS & AUTO-RETRY
+      const totalParts = Math.max(1, Math.ceil(file.size / UPLOAD_CHUNK_SIZE));
+      const totalBytes = file.size;
+      const totalMb = (totalBytes / (1024 * 1024)).toFixed(1);
 
-        const partRes = await fetch('/api/uploads/multipart/part', {
-          method: 'POST',
-          body: chunkFormData,
-        });
+      const parts: { partNumber: number; etag: string }[] = [];
+      let totalBytesUploadedBeforeCurrentPart = 0;
 
-        const partData = await partRes.json();
-        if (!partRes.ok || !partData.success) {
-          throw new Error(partData.error || 'Failed to upload video data.');
+      for (let partNumber = 1; partNumber <= totalParts; partNumber++) {
+        const start = (partNumber - 1) * UPLOAD_CHUNK_SIZE;
+        const end = Math.min(file.size, start + UPLOAD_CHUNK_SIZE);
+        const chunkBlob = file.slice(start, end);
+
+        // Upload chunk with auto-retry up to 3 attempts
+        let partSuccess = false;
+        let lastPartErr: any = null;
+
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            const chunkFormData = new FormData();
+            chunkFormData.append('uploadId', uploadId);
+            chunkFormData.append('objectKey', objectKey);
+            chunkFormData.append('partNumber', String(partNumber));
+            chunkFormData.append('chunk', chunkBlob, `part-${partNumber}.bin`);
+
+            const partResult = await uploadChunkViaXHR(chunkFormData, (loaded) => {
+              const currentTotalLoaded = totalBytesUploadedBeforeCurrentPart + loaded;
+              const percent = Math.min(
+                90,
+                Math.max(2, Math.round((currentTotalLoaded / totalBytes) * 88))
+              );
+              const loadedMb = (currentTotalLoaded / (1024 * 1024)).toFixed(1);
+              setUploadProgress(percent);
+              setUploadStatusText(
+                `Uploading to Cloudflare R2: ${percent}% (${loadedMb} MB / ${totalMb} MB) — Part ${partNumber} of ${totalParts}`
+              );
+            });
+
+            parts.push({
+              partNumber,
+              etag: partResult.etag,
+            });
+
+            totalBytesUploadedBeforeCurrentPart += chunkBlob.size;
+            partSuccess = true;
+            break;
+          } catch (err: any) {
+            lastPartErr = err;
+            if (attempt < 3) {
+              setUploadStatusText(
+                `Part ${partNumber}/${totalParts} connection retry (${attempt}/3)... Please hold.`
+              );
+              await new Promise((r) => setTimeout(r, 1200 * attempt));
+            }
+          }
         }
 
-        setUploadProgress(75);
-        setUploadStatusText('Finalizing video storage checksum...');
-
-        const completeRes = await fetch('/api/uploads/multipart/complete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            uploadId,
-            objectKey,
-            uploadRecordId,
-            parts: [{ partNumber: 1, etag: partData.etag }],
-          }),
-        });
-
-        const completeData = await completeRes.json();
-        if (!completeRes.ok || !completeData.success) {
-          throw new Error(completeData.error || 'Failed to complete video storage upload.');
+        if (!partSuccess) {
+          throw new Error(
+            `Failed to upload video part ${partNumber} of ${totalParts}: ${
+              lastPartErr?.message || 'Network disconnected'
+            }`
+          );
         }
-        finalPublicUrl = completeData.publicUrl || finalPublicUrl;
-      } else {
-        // Files > 4MB: Direct upload to Supabase Storage bucket (handles up to 50MB with native CORS)
-        setUploadStatusText('Uploading video to secure storage...');
-        const { createClient } = await import('@/lib/supabase/browser');
-        const supabase = createClient();
-        const cleanContestId = contestId || 'a1111111-1111-1111-1111-111111111111';
-        const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-        const storagePath = `nominations/${cleanContestId}/${artistProfileId}/${Date.now()}-${sanitizedName}`;
-
-        const { error: uploadErr } = await supabase.storage
-          .from('nomination-videos')
-          .upload(storagePath, file, {
-            contentType: file.type || 'video/mp4',
-            upsert: true,
-          });
-
-        if (uploadErr) {
-          throw new Error('Video storage upload failed: ' + uploadErr.message);
-        }
-
-        const { data: publicUrlData } = supabase.storage
-          .from('nomination-videos')
-          .getPublicUrl(storagePath);
-
-        finalPublicUrl = publicUrlData.publicUrl;
-
-        // Finalize upload record with verified public URL
-        setUploadProgress(85);
-        setUploadStatusText('Verifying video storage...');
-        await fetch('/api/uploads/multipart/complete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            uploadRecordId,
-            directUrl: finalPublicUrl,
-          }),
-        });
       }
+
+      // STEP 3: FINALIZE MULTIPART UPLOAD ON CLOUDFLARE R2
+      setUploadProgress(92);
+      setUploadStatusText('Verifying and assembling video on Cloudflare R2...');
+
+      const completeRes = await fetch('/api/uploads/multipart/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uploadId,
+          objectKey,
+          uploadRecordId,
+          parts,
+        }),
+      });
+
+      const completeData = await completeRes.json();
+      if (!completeRes.ok || !completeData.success) {
+        throw new Error(completeData.error || 'Failed to complete video storage upload on Cloudflare R2.');
+      }
+      finalPublicUrl = completeData.publicUrl || finalPublicUrl;
 
       setUploadProgress(95);
       setUploadStatusText('Submitting nomination for jury committee review...');
@@ -1178,7 +1241,7 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
           {isUploading ? (
             <>
               <Loader2 className="w-5 h-5 animate-spin" />
-              <span>Uploading to Cloudflare R2...</span>
+              <span>Uploading to Cloudflare R2 ({uploadProgress}%)...</span>
             </>
           ) : isCheckingDuration ? (
             <>

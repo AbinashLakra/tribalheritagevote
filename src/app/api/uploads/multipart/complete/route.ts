@@ -5,6 +5,9 @@ import { R2_BUCKET_NAME } from '@/config/r2';
 import { getMediaUrl } from '@/lib/r2/presigned-download';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+export const maxDuration = 120;
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();

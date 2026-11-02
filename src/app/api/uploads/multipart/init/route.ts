@@ -5,6 +5,9 @@ import { R2_BUCKET_NAME, isAllowedVideoType, isFileSizeValid, isVideoDurationVal
 import { createAdminClient } from '@/lib/supabase/admin';
 import { extractExtension } from '@/lib/r2/object-keys';
 
+export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
