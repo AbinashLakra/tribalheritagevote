@@ -1,18 +1,53 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminSession } from '@/lib/auth/admin-session';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { createClient } from '@/lib/supabase/server';
 
-export async function GET() {
+async function checkAdminAuth() {
   const session = await getAdminSession();
-  if (!session) {
-    return NextResponse.json({ success: false, error: 'Unauthorized: Admin login required.' }, { status: 401 });
+  if (session) {
+    if (
+      session.role === 'super_admin' ||
+      session.role === 'co_admin' ||
+      session.permissions?.can_manage_admins
+    ) {
+      return { authorized: true, name: session.name || session.username };
+    }
   }
 
-  // Only super admin, co_admin (Second Main Admin), or someone with can_manage_admins can view requests
-  if (session.role !== 'super_admin' && session.role !== 'co_admin' && !session.permissions?.can_manage_admins) {
+  // Fallback to Supabase user session
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (user) {
+      const admin = createAdminClient();
+      const { data: role } = await admin
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .in('role', ['admin', 'super_admin'])
+        .maybeSingle();
+
+      if (role) {
+        return { authorized: true, name: user.email || 'Main Administrator' };
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  return { authorized: false, name: null };
+}
+
+export async function GET() {
+  const auth = await checkAdminAuth();
+  if (!auth.authorized) {
     return NextResponse.json(
-      { success: false, error: 'Forbidden: Super Admin or Co-Admin privileges required to manage staff requests.' },
-      { status: 403 }
+      { success: false, error: 'Unauthorized: Super Admin or Second Main Admin privileges required.' },
+      { status: 401 }
     );
   }
 
@@ -20,24 +55,20 @@ export async function GET() {
   const { data: requests, error } = await admin
     .from('admin_access_requests')
     .select('*')
-    .order('updated_at', { ascending: false });
+    .order('created_at', { ascending: false });
 
   if (error) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ success: true, requests });
+  return NextResponse.json({ success: true, requests: requests || [] });
 }
 
 export async function PATCH(req: NextRequest) {
-  const session = await getAdminSession();
-  if (!session) {
-    return NextResponse.json({ success: false, error: 'Unauthorized: Admin login required.' }, { status: 401 });
-  }
-
-  if (session.role !== 'super_admin' && session.role !== 'co_admin' && !session.permissions?.can_manage_admins) {
+  const auth = await checkAdminAuth();
+  if (!auth.authorized) {
     return NextResponse.json(
-      { success: false, error: 'Forbidden: Only Super Admin or Co-Admin can approve, shift, or revoke admin permissions.' },
+      { success: false, error: 'Forbidden: Only Super Admin or Second Main Admin can approve, shift, or revoke admin permissions.' },
       { status: 403 }
     );
   }
@@ -56,7 +87,7 @@ export async function PATCH(req: NextRequest) {
     const admin = createAdminClient();
 
     const updatePayload: Record<string, any> = {
-      reviewed_by: session.name || session.username,
+      reviewed_by: auth.name || 'Main Administrator',
       reviewed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -102,14 +133,10 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const session = await getAdminSession();
-  if (!session) {
-    return NextResponse.json({ success: false, error: 'Unauthorized: Admin login required.' }, { status: 401 });
-  }
-
-  if (session.role !== 'super_admin' && session.role !== 'co_admin' && !session.permissions?.can_manage_admins) {
+  const auth = await checkAdminAuth();
+  if (!auth.authorized) {
     return NextResponse.json(
-      { success: false, error: 'Forbidden: Super Admin or Co-Admin privileges required to delete requests.' },
+      { success: false, error: 'Forbidden: Super Admin or Second Main Admin privileges required to delete requests.' },
       { status: 403 }
     );
   }
@@ -137,7 +164,7 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'Access request successfully deleted from the ledger.',
+      message: 'Access request successfully deleted from the database ledger.',
     });
   } catch (error: any) {
     return NextResponse.json(

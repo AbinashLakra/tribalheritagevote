@@ -18,8 +18,8 @@ export const nominationSchema = z.object({
   bio: z.string().min(10, 'Brief artist bio must be at least 10 characters').max(2000),
 
   // Contest & Performance Details
-  contestId: z.string().uuid('Invalid contest ID'),
-  categoryId: z.string().uuid('Invalid category ID'),
+  contestId: z.string().regex(/^[0-9a-fA-F-]{36}$/, 'Invalid contest ID format'),
+  categoryId: z.string().regex(/^[0-9a-fA-F-]{36}$/, 'Invalid category ID format'),
   title: z
     .string()
     .min(5, 'Performance title must be at least 5 characters')
@@ -32,7 +32,7 @@ export const nominationSchema = z.object({
 
 /** Nomination review schema (for reviewers/admins) */
 export const nominationReviewSchema = z.object({
-  nominationId: z.string().uuid('Invalid nomination ID'),
+  nominationId: z.string().regex(/^[0-9a-fA-F-]{36}$/, 'Invalid nomination ID format'),
   action: z.enum(['approve', 'reject', 'request_correction', 'unapprove']),
   reviewerNotes: z.string().max(1000).optional().or(z.literal('')).nullable(),
   rejectionReason: z.string().max(1000).optional().or(z.literal('')).nullable(),

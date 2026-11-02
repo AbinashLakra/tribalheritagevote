@@ -8,10 +8,10 @@ import { validateRequestBody } from '@/lib/security/request-validation';
 import { logAuditEvent } from '@/lib/security/audit';
 
 const contestUpdateSchema = z.object({
-  contestId: z.string().uuid('Invalid contest ID'),
+  contestId: z.string().min(1, 'Contest ID is required').optional(),
   newState: z.enum(['draft', 'scheduled', 'open', 'paused', 'closed', 'finalized']).optional(),
-  votingStartAt: z.string().optional(),
-  votingEndAt: z.string().optional(),
+  votingStartAt: z.string().optional().nullable(),
+  votingEndAt: z.string().optional().nullable(),
   reason: z.string().optional(),
 });
 
@@ -79,11 +79,13 @@ export async function POST(request: NextRequest) {
     const admin = createAdminClient();
 
     // 3. Fetch existing contest record
-    const { data: contest, error: fetchError } = await admin
-      .from('contests')
-      .select('*')
-      .eq('id', contestId)
-      .single();
+    let query = admin.from('contests').select('*');
+    if (contestId) {
+      query = query.eq('id', contestId);
+    } else {
+      query = query.order('created_at', { ascending: false }).limit(1);
+    }
+    const { data: contest, error: fetchError } = await query.maybeSingle();
 
     if (fetchError || !contest) {
       return NextResponse.json(
@@ -92,6 +94,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const resolvedContestId = contest.id;
     const previousState = contest.status;
     const updatePayload: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
@@ -155,7 +158,7 @@ export async function POST(request: NextRequest) {
     const { data: updatedContest, error: updateError } = await admin
       .from('contests')
       .update(updatePayload)
-      .eq('id', contestId)
+      .eq('id', resolvedContestId)
       .select('*')
       .single();
 
@@ -171,7 +174,7 @@ export async function POST(request: NextRequest) {
       actorId,
       action: 'contest_lifecycle_updated',
       targetEntity: 'contests',
-      targetId: contestId,
+      targetId: resolvedContestId,
       details: {
         actor: actorName,
         previousState,
@@ -184,7 +187,7 @@ export async function POST(request: NextRequest) {
 
     if (newState && newState !== previousState) {
       await admin.from('contest_events').insert({
-        contest_id: contestId,
+        contest_id: resolvedContestId,
         event_type: `contest_${newState}`,
         previous_state: previousState,
         new_state: newState,

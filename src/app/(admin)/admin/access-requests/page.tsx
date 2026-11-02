@@ -42,6 +42,7 @@ interface AccessRequest {
   assigned_panel?: 1 | 2 | 3 | 4 | null;
   permissions: {
     requested_role?: string;
+    requested_label?: string;
     can_moderate_videos?: boolean;
     can_manage_contest?: boolean;
     can_view_audit_logs?: boolean;
@@ -310,9 +311,9 @@ export default function AdminAccessRequestsPage() {
     }
   };
 
-  // Filtered list
-  const filteredRequests = useMemo(() => {
-    return requests.filter((req) => {
+  // Filtered & Sorted list (Pending requests appear first at the top)
+  const sortedRequests = useMemo(() => {
+    const list = requests.filter((req) => {
       if (activeTab !== 'all' && req.status !== activeTab) {
         return false;
       }
@@ -325,6 +326,12 @@ export default function AdminAccessRequestsPage() {
         return matchName || matchPhone || matchEmail || matchReason;
       }
       return true;
+    });
+
+    return list.sort((a, b) => {
+      if (a.status === 'pending' && b.status !== 'pending') return -1;
+      if (b.status === 'pending' && a.status !== 'pending') return 1;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
   }, [requests, activeTab, searchQuery]);
 
@@ -463,7 +470,7 @@ export default function AdminAccessRequestsPage() {
           <RefreshCw className="w-8 h-8 text-blue-700 animate-spin mx-auto mb-2" />
           <p className="text-sm font-semibold text-slate-600">Loading access requests...</p>
         </div>
-      ) : filteredRequests.length === 0 ? (
+      ) : sortedRequests.length === 0 ? (
         <div className="p-12 text-center bg-white rounded-2xl border border-slate-200 space-y-3">
           <UserCheck className="w-12 h-12 text-slate-400 mx-auto" />
           <h3 className="text-base font-bold text-slate-900">No Requesters Found</h3>
@@ -475,11 +482,25 @@ export default function AdminAccessRequestsPage() {
         </div>
       ) : (
         <div className="space-y-5">
-          {filteredRequests.map((req) => {
+          {sortedRequests.map((req) => {
             const isUpdating = updatingId === req.id;
             const perms = selectedPermissions[req.id] || {};
             const currentRole = selectedRoleType[req.id] || 'panel_admin';
             const currentPanel = selectedPanel[req.id] ?? 1;
+
+            const requestedRoleLabel =
+              req.permissions?.requested_label ||
+              (req.permissions?.requested_role === 'main_admin' || req.role_type === 'co_admin'
+                ? '👑 Second Main Admin (All Access)'
+                : req.permissions?.requested_role === 'panel_admin_1'
+                ? '🎬 Admin 1: Panel 1 (Cat 1 & 2)'
+                : req.permissions?.requested_role === 'panel_admin_2'
+                ? '🎭 Admin 2: Panel 2 (Cat 3 & 4)'
+                : req.permissions?.requested_role === 'panel_admin_3'
+                ? '🎥 Admin 3: Panel 3 (Cat 5 & 6)'
+                : req.permissions?.requested_role === 'panel_admin_4'
+                ? '🎵 Admin 4: Panel 4 (Cat 7 & 8)'
+                : 'Delegated Admin Access');
 
             return (
               <div
@@ -498,9 +519,13 @@ export default function AdminAccessRequestsPage() {
                   {/* Left Info Column */}
                   <div className="space-y-4 flex-1">
                     {/* Header Row */}
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-full bg-[#0f2d59] text-white font-extrabold flex items-center justify-center text-sm shrink-0">
+                        {req.full_name?.charAt(0)?.toUpperCase() || 'A'}
+                      </div>
+
                       <h3 className="text-base sm:text-lg font-extrabold text-slate-900">
-                        {req.full_name}
+                        {req.full_name || 'Admin Requester'}
                       </h3>
 
                       {/* Status badge */}
@@ -515,7 +540,7 @@ export default function AdminAccessRequestsPage() {
                             : 'bg-slate-200 text-slate-800'
                         }`}
                       >
-                        {req.status === 'approved' ? 'Active / Approved' : req.status}
+                        {req.status === 'approved' ? 'Active / Approved' : req.status === 'pending' ? '⏳ Pending Review' : req.status}
                       </span>
 
                       {/* Verified phone badge */}
@@ -526,33 +551,35 @@ export default function AdminAccessRequestsPage() {
                         </span>
                       )}
 
-                      {/* Current Assigned Role Badge */}
-                      {currentRole === 'co_admin' ? (
-                        <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-950 border border-amber-400 flex items-center gap-1 shadow-xs">
-                          <Crown className="w-3 h-3 text-amber-600" />
-                          👑 SECOND MAIN ADMIN (ALL ACCESS)
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-950 border border-blue-300 flex items-center gap-1 shadow-xs">
-                          <Video className="w-3 h-3 text-blue-700" />
-                          🎬 PANEL {currentPanel} ADMIN
-                        </span>
-                      )}
+                      {/* Requested Position Tag */}
+                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-900 border border-amber-200 flex items-center gap-1">
+                        <span>Requested:</span>
+                        <strong>{requestedRoleLabel}</strong>
+                      </span>
                     </div>
 
-                    {/* Metadata line */}
-                    <div className="flex flex-wrap gap-4 text-xs text-slate-600">
+                    {/* Metadata line with full details */}
+                    <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600">
                       <div className="flex items-center gap-1.5 font-mono">
                         <Phone className="w-3.5 h-3.5 text-blue-600" />
-                        <span className="font-semibold text-slate-900">+91 {req.phone}</span>
+                        <span className="font-bold text-slate-900">+91 {req.phone}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <Mail className="w-3.5 h-3.5 text-slate-400" />
-                        <span>{req.email}</span>
+                        <span className="font-medium text-slate-800">{req.email}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                        <span>Applied: {new Date(req.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                        <span>
+                          Applied:{' '}
+                          {new Date(req.created_at).toLocaleDateString('en-IN', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
                       </div>
                       {req.reviewed_by && (
                         <div className="text-slate-500">
@@ -562,9 +589,9 @@ export default function AdminAccessRequestsPage() {
                     </div>
 
                     {/* Purpose Statement */}
-                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 leading-relaxed">
-                      <span className="font-bold text-slate-900">Application Reason: </span>
-                      {req.reason}
+                    <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 leading-relaxed space-y-1">
+                      <span className="font-bold text-slate-900 block">Application Reason &amp; Background:</span>
+                      <p className="text-slate-800">{req.reason}</p>
                     </div>
 
                     {/* ──────────────── CATEGORY & ROLE SHIFT CONTROLS ──────────────── */}

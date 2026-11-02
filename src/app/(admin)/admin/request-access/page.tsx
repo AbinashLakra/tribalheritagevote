@@ -97,15 +97,6 @@ export default function RequestAdminAccessPage() {
         const data = await res.json();
         if (data.success && data.data) {
           setSlotStatus(data.data);
-          // If default selected role is filled, select the first available slot
-          if (data.data.filledSlots['main_admin']) {
-            const available = ADMIN_POSITION_OPTIONS.find(
-              (pos) => !data.data.filledSlots[pos.key]
-            );
-            if (available) {
-              setRoleCategory(available.key);
-            }
-          }
         }
       } catch {
         // Fallback gracefully
@@ -168,16 +159,6 @@ export default function RequestAdminAccessPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-
-    if (slotStatus.allFilled) {
-      setError('All 5 Administrator positions are already approved and filled. Applications are closed.');
-      return;
-    }
-
-    if (slotStatus.filledSlots[roleCategory]) {
-      setError('This admin position has already been assigned and approved. Please select another available position.');
-      return;
-    }
 
     const cleanPhone = phone.replace(/\D/g, '').slice(-10);
     if (cleanPhone.length !== 10) {
@@ -256,40 +237,13 @@ export default function RequestAdminAccessPage() {
             </div>
             <div className="flex items-center gap-2">
               <span className="font-mono font-bold text-blue-900">
-                {slotStatus.totalFilled} / 5 Approved
+                {slotStatus.totalFilled} / 5 Assigned
               </span>
-              {slotStatus.allFilled ? (
-                <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-800 font-extrabold text-[10px]">
-                  ALL FILLED
-                </span>
-              ) : (
-                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-extrabold text-[10px]">
-                  {5 - slotStatus.totalFilled} AVAILABLE
-                </span>
-              )}
+              <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-extrabold text-[10px]">
+                OPEN FOR APPLICATIONS
+              </span>
             </div>
           </div>
-
-          {/* Lockdown Banner when all 5 spots are filled */}
-          {slotStatus.allFilled && !submitted && (
-            <div className="p-4 rounded-2xl bg-red-50 border border-red-300 text-red-900 space-y-2">
-              <div className="flex items-center gap-2 font-extrabold text-sm text-red-800">
-                <Lock className="w-4 h-4 text-red-600" />
-                <span>Admin Request Portal Locked</span>
-              </div>
-              <p className="text-xs leading-relaxed text-red-700">
-                All 5 official administrator positions (1 Second Main Admin and 4 Panel Category Admins) have already been approved and assigned. No further applications can be accepted at this time.
-              </p>
-              <div className="pt-1">
-                <Link
-                  href="/admin/login"
-                  className="inline-flex items-center gap-1.5 text-xs font-bold text-red-800 hover:text-red-950 underline"
-                >
-                  Return to Admin Login &rarr;
-                </Link>
-              </div>
-            </div>
-          )}
 
           {submitted ? (
             <div className="text-center py-6 space-y-4">
@@ -301,7 +255,7 @@ export default function RequestAdminAccessPage() {
               </h2>
               <p className="text-xs sm:text-sm text-slate-600 max-w-sm mx-auto leading-relaxed">
                 Your mobile number <strong>+91 {phone.slice(-10)}</strong> has been verified via SMS OTP for{' '}
-                <strong className="text-blue-900">{currentPreset.label}</strong>. Once approved by the Main Super Administrator or Second Main Admin, you will be able to log in immediately via the Delegated Sub-Admin tab.
+                <strong className="text-blue-900">{currentPreset.label}</strong>. Your request is now waiting on the Main Super Administrator desk.
               </p>
               <div className="pt-4 flex justify-center">
                 <Link
@@ -312,7 +266,7 @@ export default function RequestAdminAccessPage() {
                 </Link>
               </div>
             </div>
-          ) : !slotStatus.allFilled && (
+          ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               {error && (
                 <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-start gap-2">
@@ -464,10 +418,9 @@ export default function RequestAdminAccessPage() {
                       <option
                         key={pos.key}
                         value={pos.key}
-                        disabled={isFilled}
-                        className={isFilled ? 'text-slate-400 bg-slate-100' : 'text-slate-900'}
+                        className="text-slate-900"
                       >
-                        {isFilled ? `🔒 [FILLED] ${pos.label}` : pos.label}
+                        {isFilled ? `${pos.label} (Assigned • Open for Review)` : pos.label}
                       </option>
                     );
                   })}
@@ -478,11 +431,11 @@ export default function RequestAdminAccessPage() {
                   <div className="font-bold flex items-center justify-between gap-1.5 text-[#0f2d59]">
                     <span>Scope: {currentPreset.badge}</span>
                     {isSelectedSlotFilled ? (
-                      <span className="text-[10px] font-extrabold text-red-600 uppercase">
-                        Position Already Assigned
+                      <span className="text-[10px] font-extrabold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300 uppercase">
+                        Current Admin Assigned (Can be Shifted/Replaced by Super Admin)
                       </span>
                     ) : (
-                      <span className="text-[10px] font-extrabold text-emerald-700 uppercase">
+                      <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300 uppercase">
                         Position Open
                       </span>
                     )}

@@ -38,38 +38,6 @@ export async function POST(req: NextRequest) {
     const validKey = (role_category in ROLE_PRESETS ? role_category : 'panel_admin_1') as RoleCategoryKey;
     const preset = ROLE_PRESETS[validKey];
 
-    // Check if this specific admin position is already approved and filled by SOMEONE ELSE!
-    const { data: approvedAdmins } = await admin
-      .from('admin_access_requests')
-      .select('id, role_type, assigned_panel, permissions')
-      .eq('status', 'approved');
-
-    const isSlotTaken = (approvedAdmins || []).some((adm) => {
-      // If the current requester is already the one holding this approved slot, allow them to re-verify or update
-      if (existing && adm.id === existing.id) return false;
-
-      if (preset.role_type === 'co_admin') {
-        return adm.role_type === 'co_admin' || adm.permissions?.requested_role === 'main_admin';
-      }
-      if (preset.role_type === 'panel_admin' && preset.assigned_panel) {
-        return (
-          adm.assigned_panel === preset.assigned_panel ||
-          adm.permissions?.requested_role === `panel_admin_${preset.assigned_panel}`
-        );
-      }
-      return false;
-    });
-
-    if (isSlotTaken) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `The requested position (${preset.label}) is already approved and filled by another admin. Please select an available panel position or contact the Super Administrator.`,
-        },
-        { status: 400 }
-      );
-    }
-
     const initialPermissions = {
       requested_role: validKey,
       requested_label: preset.label,
