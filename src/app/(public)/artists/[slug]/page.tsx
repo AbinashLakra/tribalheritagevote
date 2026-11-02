@@ -27,7 +27,7 @@ export async function generateMetadata({ params }: ArtistProfilePageProps) {
 
   return {
     title: `${artist.stage_name} — Adivasi Cultural Artist`,
-    description: `Watch performance by ${artist.stage_name} from ${artist.district}, ${artist.state}. Vote in the National Adivasi Cultural Arts Awards.`,
+    description: `Watch performance by ${artist.stage_name} from ${artist.district}, ${artist.state}. Vote in the Dharti Abba Veer Birsa Munda Cultural & Film Awards.`,
   };
 }
 

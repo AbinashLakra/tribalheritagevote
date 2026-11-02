@@ -5,7 +5,7 @@ import { ART_CATEGORIES } from '@/lib/constants/art-categories';
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  title: 'Submit Nomination Video — Tribal Heritage Awards 2026',
+  title: 'Dharti Abba Veer Birsa Munda — Official Artist Nomination Form',
   description: 'Submit your cultural performance video for the 8 official Nagpuri & Adivasi Award Categories.',
 };
 
@@ -43,9 +43,12 @@ export default async function ArtistNominationPage() {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="space-y-1">
-        <h1 className="text-3xl font-extrabold text-[#0f2d59]">
-          {contest?.title || 'Dharti Aaba Veer Birsa Munda Cultural & Film Awards 2026'}
+        <h1 className="text-3xl sm:text-4xl font-extrabold text-[#0f2d59] tracking-tight">
+          Dharti Abba Veer Birsa Munda
         </h1>
+        <p className="text-xs sm:text-sm font-semibold text-amber-600 uppercase tracking-wider">
+          Cultural &amp; Film Awards 2026 • Official Artist Nomination Form
+        </p>
         <p className="text-sm text-slate-600">
           Select from the 8 official competition categories below and upload your video recording directly to Cloudflare R2 storage for jury committee review and public voting.
         </p>

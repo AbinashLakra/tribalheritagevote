@@ -21,7 +21,7 @@ export default async function AdminContestPage() {
   // If no contest found, provide fallback defaults
   const currentContest = contest || {
     id: 'a1111111-1111-1111-1111-111111111111',
-    title: 'National Adivasi Cultural Arts Awards 2026',
+    title: 'Dharti Abba Veer Birsa Munda Cultural & Film Awards 2026',
     slug: 'national-adivasi-awards-2026',
     description: 'Celebrating authentic Adivasi artists across India, hosted in Rourkela, Odisha.',
     status: 'open',

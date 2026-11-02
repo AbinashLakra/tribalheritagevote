@@ -2,7 +2,7 @@ import { ShieldCheck, AlertCircle, FileText, CheckCircle2 } from 'lucide-react';
 
 export const metadata = {
   title: 'Official Contest & Voting Rules',
-  description: 'Learn the guidelines, artist eligibility, and voting rules governing the National Adivasi Cultural Arts Awards.',
+  description: 'Learn the guidelines, artist eligibility, and voting rules governing the Dharti Abba Veer Birsa Munda Cultural & Film Awards.',
 };
 
 export default function RulesPage() {

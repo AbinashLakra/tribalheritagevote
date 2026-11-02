@@ -226,7 +226,7 @@ export default async function HomePage() {
               {isVotingOpen ? 'Voting Is Live Now' : 'Contest Timeline'}
             </div>
             <h2 className="text-xl sm:text-2xl font-bold text-slate-900">
-              {contest?.title || 'National Adivasi Cultural Arts Awards 2026'}
+              {contest?.title || 'Dharti Abba Veer Birsa Munda Cultural & Film Awards 2026'}
             </h2>
             <p className="text-xs sm:text-sm text-slate-600">
               {isVotingOpen

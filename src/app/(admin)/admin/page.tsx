@@ -62,7 +62,7 @@ export default async function AdminDashboardPage() {
             Executive Control Overview
           </h1>
           <p className="text-xs sm:text-sm text-slate-600 mt-1">
-            Active Contest: <strong>{contest?.title || 'National Adivasi Cultural Arts Awards'}</strong> (Status: <span className="uppercase text-blue-700 font-bold">{contest?.status || 'draft'}</span>)
+            Active Contest: <strong>{contest?.title || 'Dharti Abba Veer Birsa Munda Cultural & Film Awards 2026'}</strong> (Status: <span className="uppercase text-blue-700 font-bold">{contest?.status || 'draft'}</span>)
           </p>
         </div>
 

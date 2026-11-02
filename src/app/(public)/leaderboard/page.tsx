@@ -71,7 +71,7 @@ export default async function LeaderboardPage({ searchParams }: LeaderboardPageP
           Live Contest Leaderboard
         </h1>
         <p className="text-sm md:text-base text-charcoal-600 max-w-2xl">
-          {contest?.title || 'National Adivasi Cultural Arts Awards 2026'} • Ranked by verified non-duplicate citizen votes.
+          {contest?.title || 'Dharti Abba Veer Birsa Munda Cultural & Film Awards 2026'} • Ranked by verified non-duplicate citizen votes.
         </p>
       </div>
 

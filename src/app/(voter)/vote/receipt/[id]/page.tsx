@@ -29,7 +29,7 @@ export default async function VoteReceiptPage({ params }: ReceiptPageProps) {
     .maybeSingle();
 
   // Handle mock / pending display if not found in database yet
-  const contestTitle = (vote?.contest as { title?: string })?.title || 'National Adivasi Cultural Arts Awards 2026';
+  const contestTitle = (vote?.contest as { title?: string })?.title || 'Dharti Abba Veer Birsa Munda Cultural & Film Awards 2026';
   const nominationTitle = (vote?.nomination as { title?: string })?.title || 'Nominated Cultural Performance';
   const artistName = (vote?.artist_profile as { stage_name?: string })?.stage_name || 'Verified Adivasi Artist';
   const category = (vote?.artist_profile as { primary_category?: string })?.primary_category || 'Traditional Arts';

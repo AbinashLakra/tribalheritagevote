@@ -478,7 +478,7 @@ function VotePageContent() {
               <span>Citizen Voting Desk</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-white">
-              National Adivasi Cultural Arts Voting
+              Dharti Abba Veer Birsa Munda Voting Desk
             </h1>
             <p className="text-xs sm:text-sm text-blue-200">
               Aap jis artist ko chahein vote de sakte hain, chahe 1 category me ya sabhi categories me. Vote dekar aap kabhi bhi Log Out karke exit kar sakte hain.

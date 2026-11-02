@@ -103,7 +103,7 @@ export default async function ArtistDashboardPage() {
               <p className="text-sm text-charcoal-600 mt-1">
                 {nomination
                   ? `${nomination.title} (${nomination.category?.name || 'Nomination'})`
-                  : 'Submit your entry for the National Adivasi Cultural Arts Awards.'}
+                  : 'Submit your entry for the Dharti Abba Veer Birsa Munda Cultural & Film Awards.'}
               </p>
             </div>
 
