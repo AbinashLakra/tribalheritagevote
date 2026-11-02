@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   AlertCircle,
   UserCheck,
+  User,
   Loader2,
   Clock,
   Sparkles,
@@ -76,11 +77,11 @@ export default function AdminLoginPage() {
     setError(null);
     setSuccess(null);
 
-    const cleanEmail = subEmail.trim();
+    const cleanUsername = subEmail.trim();
     const cleanPhone = subPassword.replace(/\D/g, '').slice(-10);
 
-    if (!cleanEmail) {
-      setError('Please enter your approved Email ID.');
+    if (!cleanUsername) {
+      setError('Please enter your registered Username, Email ID, or Mobile number.');
       setLoading(false);
       return;
     }
@@ -97,7 +98,7 @@ export default function AdminLoginPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type: 'sub_admin',
-          email: cleanEmail,
+          username: cleanUsername,
           password: cleanPhone,
         }),
       });
@@ -182,7 +183,7 @@ export default function AdminLoginPage() {
               }`}
             >
               <UserCheck className="w-3.5 h-3.5" />
-              <span>Panel / Sub-Admin</span>
+              <span>Panel &amp; Second Admin</span>
             </button>
           </div>
 
@@ -276,26 +277,26 @@ export default function AdminLoginPage() {
 
           {/* ─────────────────────────────────────────────────────────────
               TAB 2: SUB-ADMIN / PANEL ADMIN / CO-ADMIN FORM
-              Username: Email ID
+              Username: Email, Mobile, or Name
               Password: Phone Number (No OTP required)
              ───────────────────────────────────────────────────────────── */}
           {activeTab === 'sub_admin' && (
             <form onSubmit={handleSubAdminLogin} className="space-y-4">
               <div className="space-y-1">
                 <label className="block text-xs font-bold text-slate-300">
-                  Sub-Admin Username (Registered Email ID)
+                  Sub-Admin / Second Main Admin (Email, Mobile, or Name)
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
-                    <Mail className="w-4 h-4" />
+                    <User className="w-4 h-4" />
                   </div>
                   <input
-                    type="email"
+                    type="text"
                     value={subEmail}
                     onChange={(e) => setSubEmail(e.target.value)}
                     required
                     className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors"
-                    placeholder="your-name@tribalheritage.org"
+                    placeholder="9876543210 or your-email@tribalheritage.org or Name"
                   />
                 </div>
               </div>
@@ -333,12 +334,12 @@ export default function AdminLoginPage() {
                 {loading ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Verifying Panel Admin Account...</span>
+                    <span>Verifying Admin Account...</span>
                   </>
                 ) : (
                   <>
                     <Lock className="w-4 h-4" />
-                    <span>Login to Assigned Panel</span>
+                    <span>Login as Sub-Admin / Second Main Admin</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}

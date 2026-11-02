@@ -114,23 +114,37 @@ export async function getAdminSession(): Promise<AdminSessionPayload | null> {
         return null;
       }
 
-      if (record.role_type) {
-        session.role = record.role_type as any;
-      }
-      if (record.assigned_panel !== undefined) {
-        session.assignedPanel = record.assigned_panel as any;
-      }
-
-      // Dynamically reflect any shifted permissions updated by Main Super Admin
-      if (record.permissions && typeof record.permissions === 'object') {
+      if (record.role_type === 'co_admin') {
+        session.role = 'co_admin';
+        session.assignedPanel = null;
         session.permissions = {
-          can_moderate_videos: Boolean(record.permissions.can_moderate_videos),
-          can_manage_contest: Boolean(record.permissions.can_manage_contest),
-          can_view_audit_logs: Boolean(record.permissions.can_view_audit_logs),
-          can_export_data: Boolean(record.permissions.can_export_data),
-          can_view_analytics: Boolean(record.permissions.can_view_analytics ?? true),
-          can_manage_admins: false,
+          can_moderate_videos: true,
+          can_manage_contest: true,
+          can_view_audit_logs: true,
+          can_export_data: true,
+          can_view_analytics: true,
+          can_manage_admins: true, // Second Main Admin has full access to supervise and shift panel admins
+          ...(typeof record.permissions === 'object' ? record.permissions : {}),
         };
+      } else {
+        if (record.role_type) {
+          session.role = record.role_type as any;
+        }
+        if (record.assigned_panel !== undefined) {
+          session.assignedPanel = record.assigned_panel as any;
+        }
+
+        // Dynamically reflect any shifted permissions updated by Main Super Admin
+        if (record.permissions && typeof record.permissions === 'object') {
+          session.permissions = {
+            can_moderate_videos: Boolean(record.permissions.can_moderate_videos),
+            can_manage_contest: Boolean(record.permissions.can_manage_contest),
+            can_view_audit_logs: Boolean(record.permissions.can_view_audit_logs),
+            can_export_data: Boolean(record.permissions.can_export_data),
+            can_view_analytics: Boolean(record.permissions.can_view_analytics ?? true),
+            can_manage_admins: Boolean(record.permissions.can_manage_admins),
+          };
+        }
       }
     } catch {
       // Graceful fallback on network glitch

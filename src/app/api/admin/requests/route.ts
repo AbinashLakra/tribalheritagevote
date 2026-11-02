@@ -8,10 +8,10 @@ export async function GET() {
     return NextResponse.json({ success: false, error: 'Unauthorized: Admin login required.' }, { status: 401 });
   }
 
-  // Only super admin or someone with can_manage_admins can view requests
-  if (session.role !== 'super_admin' && !session.permissions?.can_manage_admins) {
+  // Only super admin, co_admin (Second Main Admin), or someone with can_manage_admins can view requests
+  if (session.role !== 'super_admin' && session.role !== 'co_admin' && !session.permissions?.can_manage_admins) {
     return NextResponse.json(
-      { success: false, error: 'Forbidden: Super Admin privileges required to manage staff requests.' },
+      { success: false, error: 'Forbidden: Super Admin or Co-Admin privileges required to manage staff requests.' },
       { status: 403 }
     );
   }
@@ -20,7 +20,7 @@ export async function GET() {
   const { data: requests, error } = await admin
     .from('admin_access_requests')
     .select('*')
-    .order('created_at', { ascending: false });
+    .order('updated_at', { ascending: false });
 
   if (error) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -35,9 +35,9 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'Unauthorized: Admin login required.' }, { status: 401 });
   }
 
-  if (session.role !== 'super_admin' && !session.permissions?.can_manage_admins) {
+  if (session.role !== 'super_admin' && session.role !== 'co_admin' && !session.permissions?.can_manage_admins) {
     return NextResponse.json(
-      { success: false, error: 'Forbidden: Only Super Admin can approve, shift, or revoke admin permissions.' },
+      { success: false, error: 'Forbidden: Only Super Admin or Co-Admin can approve, shift, or revoke admin permissions.' },
       { status: 403 }
     );
   }
@@ -107,9 +107,9 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'Unauthorized: Admin login required.' }, { status: 401 });
   }
 
-  if (session.role !== 'super_admin' && !session.permissions?.can_manage_admins) {
+  if (session.role !== 'super_admin' && session.role !== 'co_admin' && !session.permissions?.can_manage_admins) {
     return NextResponse.json(
-      { success: false, error: 'Forbidden: Super Admin privileges required to delete requests.' },
+      { success: false, error: 'Forbidden: Super Admin or Co-Admin privileges required to delete requests.' },
       { status: 403 }
     );
   }

@@ -156,18 +156,18 @@ export default function AdminAccessRequestsPage() {
       const panelMap: Record<string, 1 | 2 | 3 | 4 | null> = {};
 
       list.forEach((req) => {
-        permsMap[req.id] = {
-          can_moderate_videos: Boolean(req.permissions?.can_moderate_videos ?? true),
-          can_manage_contest: Boolean(req.permissions?.can_manage_contest),
-          can_view_audit_logs: Boolean(req.permissions?.can_view_audit_logs),
-          can_export_data: Boolean(req.permissions?.can_export_data),
-          can_view_analytics: Boolean(req.permissions?.can_view_analytics ?? true),
-          can_manage_admins: Boolean(req.permissions?.can_manage_admins),
-        };
-
         const isCoAdmin = req.role_type === 'co_admin' || req.permissions?.requested_role === 'main_admin';
         roleMap[req.id] = isCoAdmin ? 'co_admin' : 'panel_admin';
         panelMap[req.id] = (req.assigned_panel as 1 | 2 | 3 | 4 | null) ?? (isCoAdmin ? null : 1);
+
+        permsMap[req.id] = {
+          can_moderate_videos: Boolean(req.permissions?.can_moderate_videos ?? true),
+          can_manage_contest: isCoAdmin ? true : Boolean(req.permissions?.can_manage_contest),
+          can_view_audit_logs: isCoAdmin ? true : Boolean(req.permissions?.can_view_audit_logs),
+          can_export_data: isCoAdmin ? true : Boolean(req.permissions?.can_export_data),
+          can_view_analytics: Boolean(req.permissions?.can_view_analytics ?? true),
+          can_manage_admins: isCoAdmin ? true : Boolean(req.permissions?.can_manage_admins),
+        };
       });
 
       setSelectedPermissions(permsMap);
@@ -182,6 +182,11 @@ export default function AdminAccessRequestsPage() {
 
   useEffect(() => {
     fetchRequests();
+    // 8-second auto-refresh polling so incoming access requests appear immediately
+    const timer = setInterval(() => {
+      fetchRequests();
+    }, 8000);
+    return () => clearInterval(timer);
   }, []);
 
   // Toggle single permission checkbox

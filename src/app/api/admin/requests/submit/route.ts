@@ -30,38 +30,24 @@ export async function POST(req: NextRequest) {
     // Check if phone already requested
     const { data: existing } = await admin
       .from('admin_access_requests')
-      .select('id, status, permissions')
+      .select('id, status, role_type, assigned_panel, permissions')
       .or(`phone.eq.${cleanPhone},phone.eq.+91${cleanPhone}`)
       .maybeSingle();
-
-    if (existing) {
-      if (existing.status === 'pending') {
-        return NextResponse.json({
-          success: true,
-          message: 'An access request for this mobile number is already PENDING review by the Main Admin.',
-          status: 'pending',
-        });
-      }
-      if (existing.status === 'approved') {
-        return NextResponse.json({
-          success: true,
-          message: 'Your admin access is already APPROVED! You can log in via the Delegated Sub-Admin tab using your email and mobile number.',
-          status: 'approved',
-        });
-      }
-    }
 
     // Determine requested role category preset
     const validKey = (role_category in ROLE_PRESETS ? role_category : 'panel_admin_1') as RoleCategoryKey;
     const preset = ROLE_PRESETS[validKey];
 
-    // Check if this specific admin position is already approved and filled!
+    // Check if this specific admin position is already approved and filled by SOMEONE ELSE!
     const { data: approvedAdmins } = await admin
       .from('admin_access_requests')
       .select('id, role_type, assigned_panel, permissions')
       .eq('status', 'approved');
 
     const isSlotTaken = (approvedAdmins || []).some((adm) => {
+      // If the current requester is already the one holding this approved slot, allow them to re-verify or update
+      if (existing && adm.id === existing.id) return false;
+
       if (preset.role_type === 'co_admin') {
         return adm.role_type === 'co_admin' || adm.permissions?.requested_role === 'main_admin';
       }
@@ -78,7 +64,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: `The requested position (${preset.label}) is already approved and filled. Please select an available panel position or contact the Super Administrator.`,
+          error: `The requested position (${preset.label}) is already approved and filled by another admin. Please select an available panel position or contact the Super Administrator.`,
         },
         { status: 400 }
       );
@@ -95,11 +81,13 @@ export async function POST(req: NextRequest) {
       can_manage_admins: preset.permissions.can_manage_admins,
     };
 
-    // Insert or update request
-    const { data: inserted, error: insertError } = await admin
-      .from('admin_access_requests')
-      .upsert(
-        {
+    let resultRecord: any;
+
+    if (existing) {
+      // UPDATE existing request with the latest details so Main Admin sees it immediately!
+      const { data: updated, error: updateError } = await admin
+        .from('admin_access_requests')
+        .update({
           full_name: full_name.trim(),
           phone: cleanPhone,
           email: email.trim().toLowerCase(),
@@ -110,24 +98,53 @@ export async function POST(req: NextRequest) {
           assigned_panel: preset.assigned_panel,
           permissions: initialPermissions,
           updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'phone' }
-      )
-      .select()
-      .single();
+        })
+        .eq('id', existing.id)
+        .select()
+        .single();
 
-    if (insertError) {
-      console.error('Failed to submit admin request:', insertError);
-      return NextResponse.json(
-        { success: false, error: 'Failed to record request: ' + insertError.message },
-        { status: 500 }
-      );
+      if (updateError) {
+        console.error('Failed to update admin request:', updateError);
+        return NextResponse.json(
+          { success: false, error: 'Failed to update request: ' + updateError.message },
+          { status: 500 }
+        );
+      }
+      resultRecord = updated;
+    } else {
+      // Insert fresh request
+      const { data: inserted, error: insertError } = await admin
+        .from('admin_access_requests')
+        .insert({
+          full_name: full_name.trim(),
+          phone: cleanPhone,
+          email: email.trim().toLowerCase(),
+          reason: reason.trim(),
+          status: 'pending',
+          is_phone_verified: true,
+          role_type: preset.role_type,
+          assigned_panel: preset.assigned_panel,
+          permissions: initialPermissions,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error('Failed to insert admin request:', insertError);
+        return NextResponse.json(
+          { success: false, error: 'Failed to record request: ' + insertError.message },
+          { status: 500 }
+        );
+      }
+      resultRecord = inserted;
     }
 
     return NextResponse.json({
       success: true,
       message: `Admin access request submitted for ${preset.label}! Mobile number verified. The Main Admin will review and can approve or customize your privileges.`,
-      requestId: inserted.id,
+      requestId: resultRecord.id,
       roleRequested: validKey,
     });
   } catch (error: any) {

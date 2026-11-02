@@ -82,3 +82,4 @@ export async function getArtistSession(): Promise<ArtistSessionPayload | null> {
 export function hashArtistPassword(password: string, salt: string = 'adivasi_2026'): string {
   return crypto.createHash('sha256').update(`${salt}:${password.trim()}:${salt}`).digest('hex');
 }
+

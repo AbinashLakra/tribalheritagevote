@@ -153,7 +153,8 @@ export default function RequestAdminAccessPage() {
       setCooldown(60);
 
       if (data.codePreview) {
-        setOtpNotice(`OTP generated for +91 ${cleanPhone}. Verification Code: ${data.codePreview} (Valid for 5 min).`);
+        setOtp(data.codePreview);
+        setOtpNotice(`Verification Code: ${data.codePreview} (Auto-filled into OTP field). You can proceed to submit.`);
       } else {
         setOtpNotice(`SMS OTP dispatched to +91 ${cleanPhone}. Please enter the 6 digits received on your phone.`);
       }
