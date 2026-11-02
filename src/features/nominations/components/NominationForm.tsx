@@ -39,10 +39,11 @@ interface NominationFormProps {
 
 const CHUNK_SIZE = 3.5 * 1024 * 1024; // 3.5 MB per chunk
 
-// Video & Performance Submission Constraints
+// Video & Performance Submission Constraints (Strict Contest Rules)
 const MIN_VIDEO_BYTES = 50 * 1024; // 50 KB
 const MAX_VIDEO_BYTES = 100 * 1024 * 1024; // 100 MB
-const MAX_DURATION_SEC = 600; // 10 minutes
+const MIN_DURATION_SEC = 30; // Minimum 30 seconds
+const MAX_DURATION_SEC = 60; // Maximum 60 seconds (1 minute)
 const MIN_WORDS = 5; // Minimum 5 words for description
 const MAX_WORDS = 1000;
 
@@ -77,8 +78,12 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
 
   // Video File & Criteria Validation States
   const [file, setFile] = useState<File | null>(null);
+  const [selectedFileName, setSelectedFileName] = useState<string>('');
+  const [selectedFileSize, setSelectedFileSize] = useState<number>(0);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [detectedDuration, setDetectedDuration] = useState<number | null>(null);
+  const [durationError, setDurationError] = useState<string | null>(null);
+  const [isCheckingDuration, setIsCheckingDuration] = useState<boolean>(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStatusText, setUploadStatusText] = useState('');
@@ -203,17 +208,24 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
     }
   };
 
-  // Video File Selection & Flexible Validation
+  // Video File Selection & Instant Length/Size Validation
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
 
     setError(null);
+    setDurationError(null);
     setDetectedDuration(null);
+    setSelectedFileName(selectedFile.name);
+    setSelectedFileSize(selectedFile.size);
 
     // 1. MIME check
     if (!isAllowedVideoType(selectedFile.type)) {
-      setError('Invalid video format. Supported formats are MP4, WebM, and MOV.');
+      const msg = 'Invalid video format. Supported formats are MP4, WebM, and MOV.';
+      setError(msg);
+      setDurationError(msg);
+      setFile(null);
+      setPreviewUrl(null);
       return;
     }
 
@@ -221,30 +233,61 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
     const sizeBytes = selectedFile.size;
     const sizeMB = sizeBytes / (1024 * 1024);
     if (sizeBytes < MIN_VIDEO_BYTES || sizeBytes > MAX_VIDEO_BYTES) {
-      setError(
-        `Video size must be under 100 MB. Your selected file is ${sizeMB.toFixed(2)} MB.`
-      );
+      const msg = `Video size must be under 100 MB. Your selected file is ${sizeMB.toFixed(2)} MB.`;
+      setError(msg);
+      setDurationError(msg);
+      setFile(null);
+      setPreviewUrl(null);
       return;
     }
 
-    // 3. Duration check via HTML5 Video metadata
+    // 3. Instant Video Duration check via HTML5 Video metadata
+    setIsCheckingDuration(true);
     const objectUrl = URL.createObjectURL(selectedFile);
     const tempVideo = document.createElement('video');
     tempVideo.preload = 'metadata';
     tempVideo.src = objectUrl;
 
     tempVideo.onloadedmetadata = () => {
-      const dur = Math.round(tempVideo.duration);
+      setIsCheckingDuration(false);
+      const rawDur = tempVideo.duration;
+
+      if (!rawDur || !isFinite(rawDur) || isNaN(rawDur)) {
+        // Fallback if browser cannot parse length
+        setFile(selectedFile);
+        return;
+      }
+
+      const dur = Math.round(rawDur);
       setDetectedDuration(dur);
 
-      if (dur > MAX_DURATION_SEC) {
-        setError(
-          `Video time length exceeds maximum allowed duration of 10 minutes. Detected duration is ${dur} seconds.`
-        );
+      if (dur < MIN_DURATION_SEC) {
+        const errorMsg = `⚠️ Aapka video criteria se kam hai (${dur} second). Video kam se kam ${MIN_DURATION_SEC} second (30s) ka hona zaroori hai. Please 30 se 60 second ka video chunein.`;
+        setDurationError(errorMsg);
+        setError(errorMsg);
+        setFile(null); // Block upload!
+      } else if (dur > MAX_DURATION_SEC) {
+        const mins = Math.floor(dur / 60);
+        const secs = dur % 60;
+        const durFormatted = mins > 0 ? `${mins}m ${secs}s (${dur}s)` : `${dur}s`;
+        const errorMsg = `⚠️ Aapka video criteria se zyada hai (${durFormatted}). Video maximum ${MAX_DURATION_SEC} second (1 minute) tak ka hona chahiye. Please 30 se 60 second ka video chunein.`;
+        setDurationError(errorMsg);
+        setError(errorMsg);
+        setFile(null); // Block upload!
+      } else {
+        // Duration is completely valid (30s to 60s)
+        setDurationError(null);
+        setError(null);
+        setFile(selectedFile);
       }
     };
 
-    setFile(selectedFile);
+    tempVideo.onerror = () => {
+      setIsCheckingDuration(false);
+      // Fallback if browser failed metadata loading
+      setFile(selectedFile);
+    };
+
     setPreviewUrl(objectUrl);
     setUploadProgress(0);
   };
@@ -319,7 +362,11 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
 
     // Video Criteria
     if (!file) {
-      setError('Please select an authentic cultural video recording to upload in Section 3.');
+      if (durationError) {
+        setError(durationError);
+      } else {
+        setError('Please select an authentic cultural video recording (30s to 60s duration, up to 100 MB) in Section 3.');
+      }
       document.getElementById('video-upload-box')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
@@ -331,11 +378,21 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
       return;
     }
 
-    if (detectedDuration && detectedDuration > MAX_DURATION_SEC) {
-      setError(
-        `Video duration exceeds maximum allowed length of 10 minutes (Detected: ${detectedDuration}s).`
-      );
-      return;
+    if (detectedDuration !== null) {
+      if (detectedDuration < MIN_DURATION_SEC) {
+        const msg = `Video duration is too short (${detectedDuration}s). Minimum allowed duration is 30 seconds.`;
+        setError(msg);
+        setDurationError(msg);
+        document.getElementById('video-upload-box')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+      if (detectedDuration > MAX_DURATION_SEC) {
+        const msg = `Video duration is too long (${detectedDuration}s). Maximum allowed duration is 60 seconds (1 minute).`;
+        setError(msg);
+        setDurationError(msg);
+        document.getElementById('video-upload-box')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
     }
 
     setIsUploading(true);
@@ -353,6 +410,7 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
           filename: file.name,
           fileSizeBytes: file.size,
           mimeType: file.type,
+          durationSeconds: detectedDuration || undefined,
           contestId,
           phone: cleanPhone,
           email: email.trim(),
@@ -833,7 +891,7 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
         </div>
       </div>
 
-      {/* SECTION 3: VIDEO UPLOAD (UP TO 100 MB) */}
+      {/* SECTION 3: VIDEO UPLOAD (30s - 60s • UP TO 100 MB) */}
       <div className="space-y-5">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
@@ -841,10 +899,10 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
           </div>
           <div>
             <h3 className="text-base sm:text-lg font-extrabold text-slate-900">
-              3. Performance Video Upload (MP4, WebM, MOV • Up to 100 MB)
+              3. Performance Video Upload (MP4, WebM, MOV • 30s to 60s • Up to 100 MB)
             </h3>
             <p className="text-xs text-slate-500">
-              Upload your video recording directly to secure storage for jury review and public voting.
+              Official Criteria: Duration strictly between 30 seconds and 60 seconds (1 minute), File size up to 100 MB.
             </p>
           </div>
         </div>
@@ -868,17 +926,65 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
                 Click here to browse your video file
               </p>
               <p className="text-xs text-slate-500">
-                Format: MP4, WebM, MOV • Size: Any size up to 100 MB
+                Format: MP4, WebM, MOV • Duration: 30s to 60s (1 Min) • Size: Up to 100 MB
               </p>
             </div>
 
-            {file && (
-              <div className="p-3 bg-white rounded-xl border border-slate-200 inline-block text-left text-xs space-y-1">
-                <p className="font-bold text-slate-900 truncate max-w-xs">{file.name}</p>
-                <div className="flex items-center gap-3 text-slate-500">
-                  <span>Size: {formatFileSize(file.size)}</span>
-                  {detectedDuration && <span>Duration: {detectedDuration}s</span>}
+            {/* Checking duration indicator */}
+            {isCheckingDuration && (
+              <div className="p-3 bg-blue-50 rounded-xl border border-blue-200 inline-flex items-center gap-2 text-xs font-bold text-blue-800">
+                <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                <span>Checking video duration against official 30s–60s criteria...</span>
+              </div>
+            )}
+
+            {/* Valid video state */}
+            {file && !durationError && !isCheckingDuration && (
+              <div className="p-3.5 bg-emerald-50 rounded-2xl border border-emerald-300 inline-block text-left text-xs space-y-1.5 shadow-xs">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-bold text-emerald-950 truncate max-w-xs">{file.name}</p>
+                  <span className="font-extrabold text-[10px] px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900 flex items-center gap-1">
+                    <Check className="w-3 h-3 text-emerald-700" />
+                    Criteria Met
+                  </span>
                 </div>
+                <div className="flex items-center gap-3 text-emerald-800 text-[11px] font-semibold">
+                  <span>Size: {formatFileSize(file.size)}</span>
+                  <span>•</span>
+                  <span className="font-bold">Duration: {detectedDuration}s (Rule: 30s–60s Passed)</span>
+                </div>
+              </div>
+            )}
+
+            {/* Invalid duration / Upload Blocked state */}
+            {durationError && !isCheckingDuration && (
+              <div className="p-4 bg-red-50 rounded-2xl border-2 border-red-400 inline-block text-left text-xs space-y-2 shadow-xs max-w-lg">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-bold text-red-950 truncate max-w-xs flex items-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                    {selectedFileName || 'Selected Video File'}
+                  </p>
+                  <span className="font-black text-[10px] px-2 py-0.5 rounded-full bg-red-200 text-red-900 uppercase tracking-wider">
+                    Upload Blocked
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 text-red-800 text-[11px] font-bold">
+                  {selectedFileSize > 0 && <span>Size: {formatFileSize(selectedFileSize)}</span>}
+                  {detectedDuration !== null && (
+                    <>
+                      <span>•</span>
+                      <span>
+                        Detected Length: {detectedDuration < 60 ? `${detectedDuration} sec` : `${Math.floor(detectedDuration / 60)}m ${detectedDuration % 60}s (${detectedDuration}s)`}
+                      </span>
+                    </>
+                  )}
+                </div>
+                <div className="p-2.5 rounded-xl bg-white border border-red-300 text-red-700 font-semibold leading-relaxed">
+                  {durationError}
+                </div>
+                <p className="text-[11px] text-red-600 font-medium">
+                  👉 Click karke dusra video select karein jiska length 30 se 60 second (1 min) ke beech ho.
+                </p>
               </div>
             )}
           </label>
@@ -921,13 +1027,27 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
         {/* Submit Button */}
         <button
           type="submit"
-          disabled={isUploading}
-          className="w-full py-4 px-6 rounded-2xl bg-[#0f2d59] hover:bg-blue-900 text-white font-extrabold text-sm sm:text-base shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+          disabled={isUploading || !!durationError || isCheckingDuration}
+          className={`w-full py-4 px-6 rounded-2xl font-extrabold text-sm sm:text-base shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 ${
+            durationError
+              ? 'bg-red-600 hover:bg-red-700 text-white cursor-not-allowed'
+              : 'bg-[#0f2d59] hover:bg-blue-900 text-white'
+          }`}
         >
           {isUploading ? (
             <>
               <Loader2 className="w-5 h-5 animate-spin" />
               <span>Uploading to Cloudflare R2...</span>
+            </>
+          ) : isCheckingDuration ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span>Checking Video Duration (30s – 60s)...</span>
+            </>
+          ) : durationError ? (
+            <>
+              <AlertCircle className="w-5 h-5 text-white" />
+              <span>Video Duration Invalid (Must be 30s – 60s)</span>
             </>
           ) : (
             <>

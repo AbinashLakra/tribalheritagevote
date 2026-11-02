@@ -72,7 +72,7 @@ export default async function AdminNominationsPage() {
 
         <p className="text-xs sm:text-sm text-slate-600">
           {isPanelAdmin && panelConfig
-            ? `Evaluate nominations assigned to ${panelConfig.name}. Review cultural criteria, duration (30-40s), file size (15-20MB), and word count (300-500). Max 3 evaluation attempts.`
+            ? `Evaluate nominations assigned to ${panelConfig.name}. Review cultural criteria, duration (30-60s / 1 min), file size (up to 100MB), and word count (min 5 words). Max 3 evaluation attempts.`
             : 'Evaluate submitted performance recordings across all 8 award categories. You have master authorization to approve, request corrections, or permanently delete records.'}
         </p>
       </div>

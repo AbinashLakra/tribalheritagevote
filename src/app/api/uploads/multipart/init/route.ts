@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CreateMultipartUploadCommand } from '@aws-sdk/client-s3';
 import { getR2Client } from '@/lib/r2/client';
-import { R2_BUCKET_NAME, isAllowedVideoType, isFileSizeValid } from '@/config/r2';
+import { R2_BUCKET_NAME, isAllowedVideoType, isFileSizeValid, isVideoDurationValid } from '@/config/r2';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { extractExtension } from '@/lib/r2/object-keys';
 
@@ -21,6 +21,7 @@ export async function POST(req: NextRequest) {
       language,
       tribe,
       categoryName,
+      durationSeconds,
       experienceYears = 3,
       bio = '',
       email: inputEmail,
@@ -47,6 +48,27 @@ export async function POST(req: NextRequest) {
         { success: false, error: 'Video size exceeds the maximum allowed limit of 100 MB.' },
         { status: 400 }
       );
+    }
+
+    if (typeof durationSeconds === 'number' && !isNaN(durationSeconds)) {
+      if (durationSeconds < 30) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Video duration (${durationSeconds}s) is too short. Minimum allowed duration is 30 seconds.`,
+          },
+          { status: 400 }
+        );
+      }
+      if (durationSeconds > 60) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Video duration (${durationSeconds}s) is too long. Maximum allowed duration is 60 seconds (1 minute).`,
+          },
+          { status: 400 }
+        );
+      }
     }
 
     const cleanPhone = (phone || '').replace(/\D/g, '').slice(-10);

@@ -126,7 +126,7 @@ export default async function NominationStatusPage() {
                     ? 'Your nomination has been disqualified after 3 unsuccessful review evaluations and cannot be resubmitted.'
                     : nomination.status === 'correction_required' || nomination.status === 'rejected'
                     ? `The panel requested adjustments. You have ${3 - strikes} attempt(s) remaining before automatic disqualification.`
-                    : 'Your performance video recording is currently queued for jury panel review. Evaluation criteria includes video duration (30-40s), file size (15-20MB), and word description.'}
+                    : 'Your performance video recording is currently queued for jury panel review. Evaluation criteria includes video duration (30-60s / 1 min), file size (up to 100MB), and cultural description.'}
                 </p>
               </div>
             </div>
@@ -161,7 +161,7 @@ export default async function NominationStatusPage() {
             {!isDisqualified && (nomination.status === 'correction_required' || nomination.status === 'rejected') && (
               <div className="pt-4 border-t border-slate-200 flex items-center justify-between gap-4">
                 <p className="text-xs text-slate-600">
-                  Address the panel feedback above, ensure your video strictly matches criteria (30-40s duration, 15-20MB size, 300-500 words description), and submit updated entry.
+                  Address the panel feedback above, ensure your video strictly matches criteria (30-60s duration / 1 min, up to 100MB size, min 5 words description), and submit updated entry.
                 </p>
                 <Link
                   href="/artist/nomination"

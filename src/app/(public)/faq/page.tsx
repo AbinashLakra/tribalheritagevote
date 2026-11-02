@@ -23,8 +23,8 @@ const FAQS = [
     a: 'Never. Your mobile number is encrypted, hashed using SHA-256 for duplicate-prevention, and never sold, shared, or displayed in public directories.',
   },
   {
-    q: 'What video formats and file sizes are supported for nominations?',
-    a: 'We accept MP4, WebM, and QuickTime (MOV) formats up to 100MB. Files are uploaded directly to Cloudflare R2 storage for high performance.',
+    q: 'What video formats, durations, and file sizes are supported for nominations?',
+    a: 'We accept MP4, WebM, and QuickTime (MOV) formats up to 100MB. Video duration must be strictly between 30 seconds and 60 seconds (1 minute). Files are uploaded directly to Cloudflare R2 storage for high performance.',
   },
   {
     q: 'Why is my nomination marked "Under Review"?',

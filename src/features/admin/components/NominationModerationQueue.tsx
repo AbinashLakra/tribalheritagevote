@@ -514,8 +514,8 @@ export function NominationModerationQueue({
                     <Video className="w-4 h-4 text-blue-600" />
                     <span>Cloudflare R2 Performance Video Recording</span>
                   </label>
-                  <span className="text-[11px] text-slate-500">
-                    Rule Criteria: 30-40s duration • 15-20MB size
+                  <span className="text-[11px] text-slate-500 font-semibold">
+                    Rule Criteria: 30-60s duration (1 Min) • Up to 100MB size
                   </span>
                 </div>
 

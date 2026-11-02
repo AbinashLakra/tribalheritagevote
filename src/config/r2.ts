@@ -9,6 +9,12 @@
 /** Maximum video file size in bytes (100 MB). */
 export const MAX_VIDEO_SIZE_BYTES: number = 100 * 1024 * 1024;
 
+/** Minimum video duration in seconds (30 seconds). */
+export const MIN_VIDEO_DURATION_SECONDS: number = 30;
+
+/** Maximum video duration in seconds (60 seconds / 1 minute). */
+export const MAX_VIDEO_DURATION_SECONDS: number = 60;
+
 /** Maximum image file size in bytes (5 MB). */
 export const MAX_IMAGE_SIZE_BYTES: number = 5 * 1024 * 1024;
 
@@ -98,4 +104,14 @@ export function isFileSizeValid(
 ): boolean {
   const limit = type === 'video' ? MAX_VIDEO_SIZE_BYTES : MAX_IMAGE_SIZE_BYTES;
   return size > 0 && size <= limit;
+}
+
+/**
+ * Validates whether video duration meets the official 30s to 60s contest rules.
+ *
+ * @param durationSec - Video duration in seconds
+ * @returns `true` if duration is between 30 and 60 seconds
+ */
+export function isVideoDurationValid(durationSec: number): boolean {
+  return durationSec >= MIN_VIDEO_DURATION_SECONDS && durationSec <= MAX_VIDEO_DURATION_SECONDS;
 }
