@@ -29,6 +29,7 @@ export default async function AdminNominationsPage() {
       description,
       status,
       category_id,
+      sub_category,
       rejection_count,
       is_disqualified,
       reviewer_notes,

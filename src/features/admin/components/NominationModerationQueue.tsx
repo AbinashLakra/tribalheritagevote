@@ -29,6 +29,7 @@ interface NominationItem {
   description: string;
   status: string;
   category_id?: string;
+  sub_category?: 'male' | 'female' | 'general';
   rejection_count?: number;
   is_disqualified?: boolean;
   reviewer_notes?: string | null;
@@ -341,9 +342,21 @@ export function NominationModerationQueue({
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <span className="text-[10px] uppercase font-bold text-amber-600 block truncate">
-                          {item.category?.name || 'Category'}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] uppercase font-bold text-amber-600 block truncate">
+                            {item.category?.name || 'Category'}
+                          </span>
+                          {item.sub_category === 'male' && (
+                            <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-blue-100 text-blue-900 border border-blue-200 shrink-0">
+                              👨 Male Track
+                            </span>
+                          )}
+                          {item.sub_category === 'female' && (
+                            <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-pink-100 text-pink-900 border border-pink-200 shrink-0">
+                              👩 Female Track
+                            </span>
+                          )}
+                        </div>
                         <h4 className="text-sm font-bold text-slate-900 truncate">
                           {item.title}
                         </h4>
@@ -408,10 +421,23 @@ export function NominationModerationQueue({
               {/* Header Title & Disqualification Alert */}
               <div className="space-y-2 border-b border-slate-200 pb-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-100 text-[#0f2d59] text-xs font-bold uppercase tracking-wider">
-                    <Award className="w-3.5 h-3.5" />
-                    <span>{activeItem.category?.name || 'Nomination Category'}</span>
-                  </span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-100 text-[#0f2d59] text-xs font-bold uppercase tracking-wider">
+                      <Award className="w-3.5 h-3.5" />
+                      <span>{activeItem.category?.name || 'Nomination Category'}</span>
+                    </span>
+
+                    {activeItem.sub_category === 'male' && (
+                      <span className="px-2.5 py-1 rounded-full bg-blue-100 text-blue-900 border border-blue-300 font-extrabold text-xs flex items-center gap-1 shadow-xs">
+                        <span>👨</span> Male Award Track
+                      </span>
+                    )}
+                    {activeItem.sub_category === 'female' && (
+                      <span className="px-2.5 py-1 rounded-full bg-pink-100 text-pink-900 border border-pink-300 font-extrabold text-xs flex items-center gap-1 shadow-xs">
+                        <span>👩</span> Female Award Track
+                      </span>
+                    )}
+                  </div>
 
                   {/* Strike Counter Badge */}
                   <div className="flex items-center gap-2">

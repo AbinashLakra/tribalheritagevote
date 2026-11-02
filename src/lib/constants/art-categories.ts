@@ -110,6 +110,37 @@ export const ART_CATEGORIES: readonly ArtCategory[] = [
 ] as const;
 
 /**
+ * Categories that have separate Male and Female Award Tracks (Categories 2, 3, 4, 5).
+ * Both artists and voters participate in independent Male and Female tracks for these awards.
+ */
+export const GENDERED_CATEGORY_IDS = [
+  'c2222222-2222-2222-2222-222222222222', // Best Dance in Video (Male / Female Leading Role)
+  'c3333333-3333-3333-3333-333333333333', // Best Actor in a Leading Role (Male / Female)
+  'c4444444-4444-4444-4444-444444444444', // Best Singer (Male / Female)
+  'c5555555-5555-5555-5555-555555555555', // Best Cinematographer / Camera Person (Male / Female)
+] as const;
+
+export type SubCategoryTrack = 'male' | 'female' | 'general';
+
+/**
+ * Checks whether a given category ID or slug requires separate Male / Female tracks.
+ */
+export function isGenderedCategory(categoryIdOrSlug: string): boolean {
+  if (!categoryIdOrSlug) return false;
+  return (
+    GENDERED_CATEGORY_IDS.includes(categoryIdOrSlug as any) ||
+    categoryIdOrSlug.includes('c2222222') ||
+    categoryIdOrSlug.includes('c3333333') ||
+    categoryIdOrSlug.includes('c4444444') ||
+    categoryIdOrSlug.includes('c5555555') ||
+    categoryIdOrSlug === 'best-dance-in-video' ||
+    categoryIdOrSlug === 'best-actor-leading-role' ||
+    categoryIdOrSlug === 'best-singer' ||
+    categoryIdOrSlug === 'best-camera-person'
+  );
+}
+
+/**
  * Finds an art category by its URL-safe slug.
  */
 export function getCategoryBySlug(slug: string): ArtCategory | undefined {

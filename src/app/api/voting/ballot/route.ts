@@ -47,6 +47,7 @@ export async function GET(request: NextRequest) {
       .select(`
         id,
         category_id,
+        sub_category,
         title,
         description,
         vote_count,
@@ -119,6 +120,7 @@ export async function GET(request: NextRequest) {
       .select(`
         id,
         category_id,
+        sub_category,
         nomination_id,
         server_timestamp,
         nomination:nominations(title),
@@ -135,20 +137,26 @@ export async function GET(request: NextRequest) {
       .map((v) => v.nomination_id)
       .filter(Boolean);
 
-    const votedCount = votedCategoryIds.length;
-    const allCompleted = votedCount >= 8;
+    const votedTrackKeys = (voterVotes || []).map(
+      (v) => `${v.category_id}_${v.sub_category || 'general'}`
+    );
+
+    const votedCount = votedTrackKeys.length;
+    const allCompleted = votedCount >= 12;
 
     return NextResponse.json({
       success: true,
       data: {
-        contest: contest || { id: contestId, title: 'Tribal Heritage Vote 2026', status: 'open' },
+        contest: contest || { id: contestId, title: 'Dharti Abba Veer Birsa Munda Cultural & Film Awards 2026', status: 'open' },
         isAuthenticated: true,
         isVerified: true,
         voterId: voterIdentity.id,
         voterPhone: user.phone || user.user_metadata?.phone || null,
         votedCount,
         totalCategories: 8,
+        totalTracks: 12,
         votedCategoryIds,
+        votedTrackKeys,
         votedNominationIds,
         allCompleted,
         categories,

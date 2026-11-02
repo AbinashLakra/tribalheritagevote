@@ -23,10 +23,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. Rate limiting check (Max 5 vote attempts per user per 15 minutes)
+    // 2. Rate limiting check (Allows casting across all 12 award tracks)
     const rateLimit = checkRateLimit({
       key: `vote_user:${user.id}`,
-      limit: 5,
+      limit: 25,
       windowMs: 15 * 60 * 1000,
     });
 
@@ -74,11 +74,11 @@ export async function POST(request: NextRequest) {
     if (rpcError) {
       const errorMsg = rpcError.message || '';
 
-      // Check for duplicate category vote attempt
+      // Check for duplicate category / sub-category track vote attempt
       if (
         errorMsg.includes('DUPLICATE_CATEGORY_VOTE') ||
         errorMsg.includes('DUPLICATE_VOTE') ||
-        errorMsg.includes('uq_contest_category_voter') ||
+        errorMsg.includes('uq_contest_category_') ||
         errorMsg.includes('unique_violation') ||
         errorMsg.includes('23505')
       ) {
@@ -88,10 +88,16 @@ export async function POST(request: NextRequest) {
           ipHash,
         });
 
+        const customMessage = errorMsg.includes('Male track')
+          ? 'You have already cast your vote for the Male track in this category. You may still vote for the Female track!'
+          : errorMsg.includes('Female track')
+          ? 'You have already cast your vote for the Female track in this category. You may still vote for the Male track!'
+          : 'You have already cast your vote in this award track.';
+
         return NextResponse.json(
           {
             success: false,
-            error: 'You have already cast your vote in this award category. Each verified citizen must cast 1 vote in each of the 8 categories.',
+            error: customMessage,
             code: 'DUPLICATE_CATEGORY_VOTE',
           },
           { status: 409 }

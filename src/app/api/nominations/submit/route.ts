@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { logAuditEvent } from '@/lib/security/audit';
+import { isGenderedCategory } from '@/lib/constants/art-categories';
 
 export async function POST(request: NextRequest) {
   try {
@@ -8,6 +9,7 @@ export async function POST(request: NextRequest) {
     const {
       contestId,
       categoryId,
+      subCategory,
       title,
       description,
       uploadRecordId,
@@ -33,6 +35,12 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Determine and validate award subcategory (Male/Female)
+    const requiresGender = isGenderedCategory(categoryId);
+    const validSubCategory = requiresGender
+      ? (subCategory === 'female' ? 'female' : 'male')
+      : 'general';
 
     const admin = createAdminClient();
 
@@ -191,6 +199,7 @@ export async function POST(request: NextRequest) {
           contest_id: contestId,
           artist_profile_id: artistProfileId,
           category_id: categoryId,
+          sub_category: validSubCategory,
           title: title.trim(),
           description: description.trim(),
           upload_record_id: uploadRecordId,

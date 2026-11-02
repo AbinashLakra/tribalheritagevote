@@ -20,10 +20,13 @@ import {
   Lock,
   Smartphone,
   X,
+  User,
+  Users,
 } from 'lucide-react';
 import { VideoPlayer } from '@/components/shared/VideoPlayer';
 import { PhoneVerificationModal } from '@/features/auth/components/PhoneVerificationModal';
 import { createClient } from '@/lib/supabase/browser';
+import { isGenderedCategory } from '@/lib/constants/art-categories';
 
 interface Category {
   id: string;
@@ -35,6 +38,7 @@ interface Category {
 interface ArtistNomination {
   id: string;
   category_id: string;
+  sub_category?: 'male' | 'female' | 'general';
   title: string;
   description: string;
   vote_count: number;
@@ -52,6 +56,7 @@ interface ArtistNomination {
 interface BallotVoteRecord {
   id: string;
   category_id: string;
+  sub_category?: string;
   nomination_id: string;
   server_timestamp: string;
   nomination?: { title?: string } | null;
@@ -75,11 +80,13 @@ function VotePageContent() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [nominationsByCategory, setNominationsByCategory] = useState<Record<string, ArtistNomination[]>>({});
   const [votedCategoryIds, setVotedCategoryIds] = useState<string[]>([]);
+  const [votedTrackKeys, setVotedTrackKeys] = useState<string[]>([]);
   const [votedNominationIds, setVotedNominationIds] = useState<string[]>([]);
   const [ballotVotes, setBallotVotes] = useState<BallotVoteRecord[]>([]);
 
   // Navigation & Selection State
   const [activeCategoryId, setActiveCategoryId] = useState<string>('');
+  const [activeGenderFilter, setActiveGenderFilter] = useState<'all' | 'male' | 'female'>('all');
   const [selectedNominationId, setSelectedNominationId] = useState<string>('');
   const [isSubmittingVote, setIsSubmittingVote] = useState(false);
   const [voteSuccessNotice, setVoteSuccessNotice] = useState<string | null>(null);
@@ -93,6 +100,9 @@ function VotePageContent() {
     artistName: string;
     categoryName: string;
     totalVoted: number;
+    subCategory?: string;
+    canVoteOtherTrack?: boolean;
+    otherTrackName?: string;
   } | null>(null);
 
   // Fetch full ballot state from API
@@ -115,6 +125,8 @@ function VotePageContent() {
       setCategories(bData.categories || []);
       setNominationsByCategory(bData.nominationsByCategory || {});
       setVotedCategoryIds(bData.votedCategoryIds || []);
+      const tracks = bData.votedTrackKeys || [];
+      setVotedTrackKeys(tracks);
       setVotedNominationIds(bData.votedNominationIds || []);
       setBallotVotes(bData.ballotVotes || []);
 
@@ -123,10 +135,15 @@ function VotePageContent() {
         setShowPhoneModal(true);
       }
 
-      // Determine initial active category
-      const unvotedCats = (bData.categories || []).filter(
-        (c: Category) => !bData.votedCategoryIds?.includes(c.id)
-      );
+      // Determine unvoted categories considering 12 tracks
+      const unvotedCats = (bData.categories || []).filter((c: Category) => {
+        if (isGenderedCategory(c.id)) {
+          const maleVoted = tracks.includes(`${c.id}_male`);
+          const femaleVoted = tracks.includes(`${c.id}_female`);
+          return !maleVoted || !femaleVoted;
+        }
+        return !tracks.includes(`${c.id}_general`) && !bData.votedCategoryIds?.includes(c.id);
+      });
 
       // If user came via query param
       if (requestedCategorySlug) {
@@ -179,13 +196,38 @@ function VotePageContent() {
     return nominationsByCategory[activeCategory.id] || [];
   }, [nominationsByCategory, activeCategory]);
 
-  const isCurrentCategoryVoted = useMemo(() => {
-    return votedCategoryIds.includes(activeCategoryId);
-  }, [votedCategoryIds, activeCategoryId]);
+  const isCurrentGendered = useMemo(() => {
+    return activeCategory ? isGenderedCategory(activeCategory.id) : false;
+  }, [activeCategory]);
+
+  const isMaleTrackVoted = useMemo(() => {
+    if (!activeCategory) return false;
+    return votedTrackKeys.includes(`${activeCategory.id}_male`);
+  }, [activeCategory, votedTrackKeys]);
+
+  const isFemaleTrackVoted = useMemo(() => {
+    if (!activeCategory) return false;
+    return votedTrackKeys.includes(`${activeCategory.id}_female`);
+  }, [activeCategory, votedTrackKeys]);
+
+  const isCurrentCategoryFullyVoted = useMemo(() => {
+    if (!activeCategory) return false;
+    if (isCurrentGendered) {
+      return isMaleTrackVoted && isFemaleTrackVoted;
+    }
+    return votedTrackKeys.includes(`${activeCategory.id}_general`) || votedCategoryIds.includes(activeCategory.id);
+  }, [activeCategory, isCurrentGendered, isMaleTrackVoted, isFemaleTrackVoted, votedTrackKeys, votedCategoryIds]);
+
+  const filteredNominations = useMemo(() => {
+    if (!isCurrentGendered || activeGenderFilter === 'all') {
+      return activeNominations;
+    }
+    return activeNominations.filter((n) => (n.sub_category || 'male') === activeGenderFilter);
+  }, [activeNominations, isCurrentGendered, activeGenderFilter]);
 
   const allBallotCompleted = useMemo(() => {
-    return categories.length > 0 && votedCategoryIds.length >= categories.length;
-  }, [categories, votedCategoryIds]);
+    return votedTrackKeys.length >= 12;
+  }, [votedTrackKeys]);
 
   // Handle Logout (Available at any time!)
   const handleLogout = async () => {
@@ -201,6 +243,7 @@ function VotePageContent() {
     setIsVerified(false);
     setVoterPhone(null);
     setVotedCategoryIds([]);
+    setVotedTrackKeys([]);
     setVotedNominationIds([]);
     setBallotVotes([]);
     setJustVotedInfo(null);
@@ -208,7 +251,7 @@ function VotePageContent() {
     router.replace('/');
   };
 
-  // Submit Vote for the Active Category
+  // Submit Vote for the Active Category and Track
   const handleCastCategoryVote = async () => {
     if (!activeCategory || !selectedNominationId) {
       setError('Please select an artist nominee in this category to cast your vote.');
@@ -220,15 +263,25 @@ function VotePageContent() {
       return;
     }
 
+    const selectedNom = activeNominations.find((n) => n.id === selectedNominationId);
+    if (!selectedNom) {
+      setError('Selected nominee could not be verified.');
+      return;
+    }
+
     // Check if voter already voted for this artist
     if (votedNominationIds.includes(selectedNominationId)) {
       setError('You have already voted for this artist. Duplicate votes for the same artist are not permitted.');
       return;
     }
 
-    // Check if category vote is already used
-    if (votedCategoryIds.includes(activeCategory.id)) {
-      setError('You have already cast your vote in this award category. Each voter may cast 1 vote per category.');
+    // Check track key
+    const nomTrack = isCurrentGendered ? (selectedNom.sub_category || 'general') : 'general';
+    const targetTrackKey = `${activeCategory.id}_${nomTrack}`;
+
+    if (votedTrackKeys.includes(targetTrackKey)) {
+      const trackName = nomTrack === 'male' ? 'Male Track' : nomTrack === 'female' ? 'Female Track' : 'Category';
+      setError(`You have already cast your vote for the ${trackName} in this award category.`);
       return;
     }
 
@@ -251,26 +304,44 @@ function VotePageContent() {
         throw new Error(data.error || 'Failed to record vote for this category.');
       }
 
-      const selectedNom = activeNominations.find((n) => n.id === selectedNominationId);
-      const newVotedCount = votedCategoryIds.length + 1;
-
-      // Update state locally
-      setVotedCategoryIds((prev) => [...prev, activeCategory.id]);
+      const updatedTrackKeys = [...votedTrackKeys, targetTrackKey];
+      setVotedTrackKeys(updatedTrackKeys);
       setVotedNominationIds((prev) => [...prev, selectedNominationId]);
+      if (!votedCategoryIds.includes(activeCategory.id)) {
+        setVotedCategoryIds((prev) => [...prev, activeCategory.id]);
+      }
+
+      // Check if opposite gender track is available in this same category
+      let canVoteOtherTrack = false;
+      let otherTrackName = '';
+      if (isCurrentGendered) {
+        if (nomTrack === 'male' && !updatedTrackKeys.includes(`${activeCategory.id}_female`)) {
+          canVoteOtherTrack = true;
+          otherTrackName = 'Female Track';
+        } else if (nomTrack === 'female' && !updatedTrackKeys.includes(`${activeCategory.id}_male`)) {
+          canVoteOtherTrack = true;
+          otherTrackName = 'Male Track';
+        }
+      }
+
+      const trackDisplay = nomTrack === 'male' ? ' (Male Award Track)' : nomTrack === 'female' ? ' (Female Award Track)' : '';
 
       // Trigger Joyful Confirmation Popup
       setJustVotedInfo({
         artistName: selectedNom?.artist?.stage_name || selectedNom?.artist?.full_name || selectedNom?.title || 'Artist',
-        categoryName: activeCategory.name,
-        totalVoted: newVotedCount,
+        categoryName: `${activeCategory.name}${trackDisplay}`,
+        totalVoted: updatedTrackKeys.length,
+        subCategory: nomTrack,
+        canVoteOtherTrack,
+        otherTrackName,
       });
 
       setSelectedNominationId('');
       setVoteSuccessNotice(
-        `Vote successfully recorded for ${selectedNom?.artist?.stage_name || 'artist'} in ${activeCategory.name}!`
+        `Vote successfully recorded for ${selectedNom?.artist?.stage_name || 'artist'} in ${activeCategory.name}${trackDisplay}!`
       );
 
-      // Re-fetch ballot data to sync
+      // Re-fetch ballot data to sync ledger
       await fetchBallot();
     } catch (err: any) {
       setError(err.message || 'Error casting vote.');
@@ -279,13 +350,27 @@ function VotePageContent() {
     }
   };
 
-  // Move to next unvoted category after success modal
-  const handleProceedToNextCategory = () => {
+  // Move to next unvoted category/track after success modal
+  const handleProceedToNextCategory = (preferredFilter?: 'male' | 'female') => {
     setJustVotedInfo(null);
-    const unvoted = categories.filter((c) => !votedCategoryIds.includes(c.id));
+    setSelectedNominationId('');
+
+    if (preferredFilter && isCurrentGendered) {
+      setActiveGenderFilter(preferredFilter);
+      return;
+    }
+
+    // Look for category with unvoted tracks
+    const unvoted = categories.filter((c) => {
+      if (isGenderedCategory(c.id)) {
+        return !votedTrackKeys.includes(`${c.id}_male`) || !votedTrackKeys.includes(`${c.id}_female`);
+      }
+      return !votedTrackKeys.includes(`${c.id}_general`) && !votedCategoryIds.includes(c.id);
+    });
+
     if (unvoted.length > 0) {
       setActiveCategoryId(unvoted[0].id);
-      setSelectedNominationId('');
+      setActiveGenderFilter('all');
     }
   };
 
@@ -305,7 +390,7 @@ function VotePageContent() {
   }
 
   // ─────────────────────────────────────────────────────────────────
-  // VIEW A: ALL 8 CATEGORIES COMPLETED - OFFICIAL RECEIPT
+  // VIEW A: ALL 12 AWARD TRACKS COMPLETED - OFFICIAL RECEIPT
   // ─────────────────────────────────────────────────────────────────
   if (allBallotCompleted) {
     return (
@@ -313,7 +398,7 @@ function VotePageContent() {
         {/* Certificate Card */}
         <div className="bg-white rounded-3xl border-2 border-emerald-500 shadow-2xl overflow-hidden p-6 sm:p-10 space-y-6 relative">
           <div className="absolute top-0 right-0 bg-emerald-600 text-white text-[10px] uppercase font-black px-4 py-1 rounded-bl-xl tracking-widest shadow">
-            Official Ballot Cast • 8/8 Completed
+            Official Ballot Cast • 12/12 Tracks Completed
           </div>
 
           <div className="text-center space-y-3 pt-4">
@@ -326,11 +411,11 @@ function VotePageContent() {
             </span>
 
             <h1 className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight">
-              Dharti Aaba Veer Birsa Munda Cultural &amp; Film Awards 2026
+              Dharti Abba Veer Birsa Munda Cultural &amp; Film Awards 2026
             </h1>
 
             <p className="text-xs sm:text-sm text-slate-600 max-w-lg mx-auto leading-relaxed">
-              Thank you for upholding tribal heritage and cultural democracy. Your vote in all 8 official award categories has been permanently recorded in the cryptographic ledger.
+              Thank you for upholding tribal heritage and cultural democracy. Your votes across all 12 official award tracks (including separate Male and Female tracks) have been permanently sealed in the database ledger.
             </p>
           </div>
 
@@ -342,7 +427,7 @@ function VotePageContent() {
             </div>
             <div>
               <span className="text-slate-500 block text-[10px] uppercase font-bold">Total Votes Cast:</span>
-              <span className="font-bold text-emerald-700">8 of 8 Categories Complete</span>
+              <span className="font-bold text-emerald-700">12 of 12 Award Tracks Complete</span>
             </div>
             <div>
               <span className="text-slate-500 block text-[10px] uppercase font-bold">Status:</span>
@@ -350,25 +435,40 @@ function VotePageContent() {
             </div>
           </div>
 
-          {/* Breakdown of 8 votes */}
+          {/* Breakdown of 12 votes */}
           <div className="space-y-3">
             <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">
-              Your 8 Official Award Votes:
+              Your 12 Official Award Votes Cast:
             </h4>
 
             <div className="divide-y divide-slate-100 border border-slate-200 rounded-2xl overflow-hidden bg-white text-xs">
-              {categories.map((cat, idx) => {
-                const vote = ballotVotes.find((v) => v.category_id === cat.id);
+              {ballotVotes.map((vote, idx) => {
+                const subCatLabel =
+                  vote.sub_category === 'male'
+                    ? '👨 Male Track'
+                    : vote.sub_category === 'female'
+                    ? '👩 Female Track'
+                    : 'Award Track';
+
+                const cat = categories.find((c) => c.id === vote.category_id);
+
                 return (
-                  <div key={cat.id} className="p-3.5 flex items-center justify-between gap-3">
+                  <div key={vote.id || idx} className="p-3.5 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black flex items-center justify-center shrink-0">
                         {idx + 1}
                       </span>
                       <div className="truncate">
-                        <span className="font-bold text-slate-900 block truncate">{cat.name}</span>
-                        <span className="text-slate-500 text-[11px] truncate">
-                          {vote?.artist?.stage_name || vote?.nomination?.title || 'Vote Recorded'}
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-900 truncate">
+                            {cat?.name || 'Award Category'}
+                          </span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 shrink-0">
+                            {subCatLabel}
+                          </span>
+                        </div>
+                        <span className="text-slate-500 text-[11px] truncate block">
+                          {vote.artist?.stage_name || vote.nomination?.title || 'Vote Recorded'}
                         </span>
                       </div>
                     </div>
@@ -401,8 +501,9 @@ function VotePageContent() {
   // ─────────────────────────────────────────────────────────────────
   // VIEW B: VOTING DESK (VOTE FOR WHOEVER YOU WANT, EXIT ANYTIME)
   // ─────────────────────────────────────────────────────────────────
-  const votedCount = votedCategoryIds.length;
-  const progressPercent = Math.round((votedCount / 8) * 100);
+  const votedTracksCount = votedTrackKeys.length;
+  const totalTracks = 12;
+  const progressPercent = Math.min(100, Math.round((votedTracksCount / totalTracks) * 100));
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
@@ -437,21 +538,48 @@ function VotePageContent() {
                 Category: <strong>{justVotedInfo.categoryName}</strong>
               </p>
               <p className="text-xs text-emerald-800 font-semibold bg-emerald-50 p-3 rounded-2xl border border-emerald-200">
-                Aapka vote database ledger me permanently record ho chuka hai. Same artist ko dobara vote nahi diya ja sakta.
+                Aapka vote database ledger me permanently record ho chuka hai. Is artist aur is award track ke liye aapka vote lock ho gaya hai.
               </p>
             </div>
 
+            {/* Prompt for opposite track in gendered category */}
+            {justVotedInfo.canVoteOtherTrack && (
+              <div className="p-3 bg-amber-50 rounded-2xl border border-amber-300 text-left space-y-1">
+                <span className="text-[11px] font-black uppercase tracking-wider text-amber-900 block flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                  Is Category me {justVotedInfo.otherTrackName} ka Vote Baki Hai!
+                </span>
+                <p className="text-xs text-amber-800">
+                  Aap is category ke <strong>{justVotedInfo.otherTrackName}</strong> ke liye bhi ek alag vote de sakte hain!
+                </p>
+              </div>
+            )}
+
             <div className="text-xs text-slate-500 font-medium">
-              Ballot Progress: <strong>{justVotedInfo.totalVoted} of 8 Categories Voted</strong>
+              Ballot Progress: <strong>{justVotedInfo.totalVoted} of {totalTracks} Award Tracks Voted</strong>
             </div>
 
-            <div className="space-y-3 pt-2">
+            <div className="space-y-2.5 pt-1">
+              {justVotedInfo.canVoteOtherTrack && (
+                <button
+                  onClick={() =>
+                    handleProceedToNextCategory(
+                      justVotedInfo.subCategory === 'male' ? 'female' : 'male'
+                    )
+                  }
+                  className="w-full py-3 px-5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <span>Vote for {justVotedInfo.otherTrackName} Now</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              )}
+
               {/* Option 1: Continue voting for other artists */}
               <button
-                onClick={handleProceedToNextCategory}
-                className="w-full py-3.5 px-5 rounded-2xl bg-[#0f2d59] hover:bg-blue-900 text-white font-extrabold text-xs uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                onClick={() => handleProceedToNextCategory()}
+                className="w-full py-3 px-5 rounded-2xl bg-[#0f2d59] hover:bg-blue-900 text-white font-extrabold text-xs uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
-                <span>Vote for Another Artist / Category</span>
+                <span>Vote for Another Category / Artist</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
 
@@ -459,10 +587,10 @@ function VotePageContent() {
               <button
                 onClick={handleLogout}
                 disabled={isLoggingOut}
-                className="w-full py-3 px-5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                className="w-full py-2.5 px-5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
                 <LogOut className="w-4 h-4 text-slate-600" />
-                <span>{isLoggingOut ? 'Logging out...' : 'Log Out & Exit Now'}</span>
+                <span>{isLoggingOut ? 'Logging out...' : 'Log Out & Exit Session'}</span>
               </button>
             </div>
           </div>
@@ -481,7 +609,7 @@ function VotePageContent() {
               Dharti Abba Veer Birsa Munda Voting Desk
             </h1>
             <p className="text-xs sm:text-sm text-blue-200">
-              Aap jis artist ko chahein vote de sakte hain, chahe 1 category me ya sabhi categories me. Vote dekar aap kabhi bhi Log Out karke exit kar sakte hain.
+              Aap jis artist ko chahein vote de sakte hain. Categories 2, 3, 4, 5 me Male aur Female dono ke liye alag alag vote de sakte hain (Total 12 Award Tracks). Vote dekar aap kabhi bhi Log Out karke exit kar sakte hain.
             </p>
           </div>
 
@@ -521,11 +649,11 @@ function VotePageContent() {
           </div>
         </div>
 
-        {/* Progress Bar (X / 8 Categories) */}
+        {/* Progress Bar (X / 12 Award Tracks) */}
         <div className="space-y-2 pt-2">
           <div className="flex justify-between text-xs font-bold text-blue-100">
             <span>
-              Ballot Progress: <strong>{votedCount} of 8 Categories Voted</strong>
+              Ballot Progress: <strong>{votedTracksCount} of {totalTracks} Award Tracks Voted</strong>
             </span>
             <span className="text-amber-300">{progressPercent}% Completed</span>
           </div>
@@ -547,7 +675,15 @@ function VotePageContent() {
 
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
           {categories.map((cat, idx) => {
-            const isVoted = votedCategoryIds.includes(cat.id);
+            const isGendered = isGenderedCategory(cat.id);
+            const isMaleVoted = votedTrackKeys.includes(`${cat.id}_male`);
+            const isFemaleVoted = votedTrackKeys.includes(`${cat.id}_female`);
+            const isBothVoted = isMaleVoted && isFemaleVoted;
+            const isPartialVoted = isMaleVoted || isFemaleVoted;
+            const isGeneralVoted =
+              votedTrackKeys.includes(`${cat.id}_general`) || votedCategoryIds.includes(cat.id);
+
+            const isFullyComplete = isGendered ? isBothVoted : isGeneralVoted;
             const isActive = cat.id === activeCategoryId;
 
             return (
@@ -555,6 +691,7 @@ function VotePageContent() {
                 key={cat.id}
                 onClick={() => {
                   setActiveCategoryId(cat.id);
+                  setActiveGenderFilter('all');
                   setSelectedNominationId('');
                   setError(null);
                   setVoteSuccessNotice(null);
@@ -562,8 +699,10 @@ function VotePageContent() {
                 className={`p-2.5 rounded-2xl border text-left transition-all flex flex-col justify-between h-24 cursor-pointer ${
                   isActive
                     ? 'bg-[#0f2d59] text-white border-[#0f2d59] shadow-md ring-2 ring-blue-500'
-                    : isVoted
+                    : isFullyComplete
                     ? 'bg-emerald-50 border-emerald-300 text-emerald-950'
+                    : isPartialVoted
+                    ? 'bg-blue-50 border-blue-300 text-blue-950'
                     : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
                 }`}
               >
@@ -572,18 +711,28 @@ function VotePageContent() {
                     className={`w-5 h-5 rounded-full text-[10px] font-black flex items-center justify-center ${
                       isActive
                         ? 'bg-amber-400 text-slate-950'
-                        : isVoted
+                        : isFullyComplete
                         ? 'bg-emerald-600 text-white'
+                        : isPartialVoted
+                        ? 'bg-blue-600 text-white'
                         : 'bg-slate-100 text-slate-600'
                     }`}
                   >
-                    {isVoted ? '✓' : idx + 1}
+                    {isFullyComplete ? '✓' : idx + 1}
                   </span>
-                  {isVoted && (
+                  {isFullyComplete ? (
                     <span className="text-[9px] font-extrabold uppercase text-emerald-700">
-                      Voted
+                      {isGendered ? '✓ Both' : 'Voted'}
                     </span>
-                  )}
+                  ) : isPartialVoted ? (
+                    <span className="text-[9px] font-extrabold uppercase text-blue-700">
+                      1/2 Voted
+                    </span>
+                  ) : isGendered ? (
+                    <span className="text-[8px] font-bold text-slate-400">
+                      M &amp; F
+                    </span>
+                  ) : null}
                 </div>
 
                 <span className="text-[11px] font-bold line-clamp-2 leading-tight">
@@ -622,45 +771,138 @@ function VotePageContent() {
       {activeCategory && (
         <div className="bg-white rounded-3xl border border-slate-200 shadow-md p-6 sm:p-8 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
-            <div>
-              <span className="text-xs uppercase font-extrabold tracking-widest text-amber-600">
-                {isCurrentCategoryVoted ? 'Category Vote Recorded' : 'Category Open for Voting'}
-              </span>
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs uppercase font-extrabold tracking-widest text-amber-600">
+                  {isCurrentCategoryFullyVoted
+                    ? isCurrentGendered
+                      ? '✓ Both Male & Female Votes Cast'
+                      : 'Category Vote Recorded'
+                    : isCurrentGendered && (isMaleTrackVoted || isFemaleTrackVoted)
+                    ? '1 of 2 Tracks Voted'
+                    : 'Category Open for Voting'}
+                </span>
+                {isCurrentGendered && (
+                  <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-100 text-blue-900 border border-blue-200">
+                    Separate Male &amp; Female Awards
+                  </span>
+                )}
+              </div>
               <h2 className="text-xl sm:text-2xl font-black text-slate-900 mt-0.5">
                 {activeCategory.name}
               </h2>
             </div>
 
-            {isCurrentCategoryVoted ? (
-              <span className="px-3.5 py-1.5 rounded-full bg-emerald-100 text-emerald-900 font-extrabold text-xs flex items-center gap-1.5 self-start sm:self-auto">
+            {isCurrentCategoryFullyVoted ? (
+              <span className="px-3.5 py-1.5 rounded-full bg-emerald-100 text-emerald-900 font-extrabold text-xs flex items-center gap-1.5 self-start sm:self-auto shrink-0">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span>1 Vote Cast in this Category</span>
+                <span>
+                  {isCurrentGendered ? '2/2 Votes Complete' : '1 Vote Cast in this Category'}
+                </span>
+              </span>
+            ) : isCurrentGendered && (isMaleTrackVoted || isFemaleTrackVoted) ? (
+              <span className="px-3.5 py-1.5 rounded-full bg-blue-100 text-blue-900 font-extrabold text-xs flex items-center gap-1.5 self-start sm:self-auto shrink-0">
+                <Check className="w-4 h-4 text-blue-600" />
+                <span>
+                  {isMaleTrackVoted ? 'Male Done • Female Track Open' : 'Female Done • Male Track Open'}
+                </span>
               </span>
             ) : (
-              <span className="px-3.5 py-1.5 rounded-full bg-amber-100 text-amber-900 font-extrabold text-xs flex items-center gap-1.5 self-start sm:self-auto">
+              <span className="px-3.5 py-1.5 rounded-full bg-amber-100 text-amber-900 font-extrabold text-xs flex items-center gap-1.5 self-start sm:self-auto shrink-0">
                 <Clock className="w-4 h-4 text-amber-700" />
-                <span>Select Any Artist to Vote</span>
+                <span>
+                  {isCurrentGendered ? 'Vote for Both Male & Female' : 'Select Any Artist to Vote'}
+                </span>
               </span>
             )}
           </div>
 
+          {/* Sub-Category Gender Track Filter (Categories 2, 3, 4, 5) */}
+          {isCurrentGendered && (
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-200">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-600">Filter Nominees:</span>
+                <div className="inline-flex rounded-xl bg-slate-200/80 p-0.5 text-xs font-bold">
+                  <button
+                    onClick={() => {
+                      setActiveGenderFilter('all');
+                      setSelectedNominationId('');
+                    }}
+                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      activeGenderFilter === 'all'
+                        ? 'bg-white text-slate-900 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    All ({activeNominations.length})
+                  </button>
+                  <button
+                    onClick={() => {
+                      setActiveGenderFilter('male');
+                      setSelectedNominationId('');
+                    }}
+                    className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                      activeGenderFilter === 'male'
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <span>👨 Male Track ({activeNominations.filter((n) => n.sub_category === 'male').length})</span>
+                    {isMaleTrackVoted && (
+                      <span className="w-4 h-4 rounded-full bg-emerald-500 text-white text-[9px] flex items-center justify-center font-black">
+                        ✓
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setActiveGenderFilter('female');
+                      setSelectedNominationId('');
+                    }}
+                    className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                      activeGenderFilter === 'female'
+                        ? 'bg-pink-600 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <span>👩 Female Track ({activeNominations.filter((n) => n.sub_category === 'female').length})</span>
+                    {isFemaleTrackVoted && (
+                      <span className="w-4 h-4 rounded-full bg-emerald-500 text-white text-[9px] flex items-center justify-center font-black">
+                        ✓
+                      </span>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div className="text-[11px] font-semibold text-slate-500">
+                Tracks: {isMaleTrackVoted ? '👨 Male ✓' : '👨 Male ⭕'} • {isFemaleTrackVoted ? '👩 Female ✓' : '👩 Female ⭕'}
+              </div>
+            </div>
+          )}
+
           {/* Nominees Grid */}
-          {activeNominations.length === 0 ? (
+          {filteredNominations.length === 0 ? (
             <div className="p-12 text-center bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
               <Award className="w-10 h-10 text-slate-400 mx-auto" />
               <h4 className="text-sm font-bold text-slate-800">
-                No approved nominations in this category yet.
+                No approved nominations in this view.
               </h4>
               <p className="text-xs text-slate-500">
-                Audition recordings are actively undergoing jury review. Please proceed to other categories.
+                {isCurrentGendered && activeGenderFilter !== 'all'
+                  ? `No nominations currently listed under the ${activeGenderFilter} track. Try selecting 'All' above.`
+                  : 'Audition recordings are actively undergoing jury review.'}
               </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {activeNominations.map((nom) => {
+              {filteredNominations.map((nom) => {
                 const isSelected = selectedNominationId === nom.id;
                 const isAlreadyVotedNom = votedNominationIds.includes(nom.id);
-                const isCategoryAlreadyVoted = isCurrentCategoryVoted;
+                const nomTrack = isCurrentGendered ? (nom.sub_category || 'general') : 'general';
+                const trackKey = `${activeCategory.id}_${nomTrack}`;
+                const isThisTrackVoted = votedTrackKeys.includes(trackKey);
+                const isCategoryLocked = isCurrentGendered ? isThisTrackVoted : isCurrentCategoryFullyVoted;
                 const videoUrl = nom.upload_record?.public_url;
 
                 return (
@@ -671,7 +913,7 @@ function VotePageContent() {
                         setShowPhoneModal(true);
                         return;
                       }
-                      if (!isCategoryAlreadyVoted && !isAlreadyVotedNom) {
+                      if (!isCategoryLocked && !isAlreadyVotedNom) {
                         setSelectedNominationId(nom.id);
                         setError(null);
                       }
@@ -681,12 +923,30 @@ function VotePageContent() {
                         ? 'border-emerald-500 ring-2 ring-emerald-400 bg-emerald-50/30 shadow-md'
                         : isSelected
                         ? 'border-[#0f2d59] ring-4 ring-blue-500/20 shadow-lg bg-blue-50/40 cursor-pointer'
-                        : isCategoryAlreadyVoted
+                        : isCategoryLocked
                         ? 'border-slate-200 bg-slate-50 opacity-75'
                         : 'border-slate-200 hover:border-slate-300 bg-white shadow-xs cursor-pointer'
                     }`}
                   >
                     <div>
+                      {/* Sub-category Gender Track Badge for Categories 2, 3, 4, 5 */}
+                      {isCurrentGendered && (
+                        <div
+                          className={`text-[10px] font-black uppercase tracking-wider py-1.5 px-3 flex items-center justify-between ${
+                            nom.sub_category === 'female'
+                              ? 'bg-pink-100 text-pink-900 border-b border-pink-200'
+                              : 'bg-blue-100 text-blue-900 border-b border-blue-200'
+                          }`}
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <span>{nom.sub_category === 'female' ? '👩 Female Track' : '👨 Male Track'}</span>
+                          </span>
+                          <span className="text-[9px] font-normal lowercase text-slate-500">
+                            separate award
+                          </span>
+                        </div>
+                      )}
+
                       {/* Voted Badge Header if already voted for this artist */}
                       {isAlreadyVotedNom && (
                         <div className="bg-emerald-600 text-white text-[11px] font-black uppercase tracking-wider py-1.5 px-3 flex items-center justify-center gap-1.5">
@@ -752,13 +1012,19 @@ function VotePageContent() {
                           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
                           <span>Already Voted for this Artist</span>
                         </button>
-                      ) : isCategoryAlreadyVoted ? (
+                      ) : isThisTrackVoted ? (
                         <button
                           disabled
                           className="w-full py-2 px-3 rounded-xl text-xs font-bold bg-slate-100 text-slate-500 border border-slate-200 flex items-center justify-center gap-1.5 cursor-not-allowed"
                         >
                           <Lock className="w-3.5 h-3.5 text-slate-400" />
-                          <span>Category Vote Used (1 per category)</span>
+                          <span>
+                            {nomTrack === 'female'
+                              ? 'Female Track Vote Used'
+                              : nomTrack === 'male'
+                              ? 'Male Track Vote Used'
+                              : 'Category Vote Used'}
+                          </span>
                         </button>
                       ) : (
                         <button
@@ -783,7 +1049,11 @@ function VotePageContent() {
                               isSelected ? 'fill-amber-400 text-amber-400' : 'text-slate-400'
                             }`}
                           />
-                          <span>{isSelected ? 'Selected for Vote' : 'Vote for this Artist'}</span>
+                          <span>
+                            {isSelected
+                              ? 'Selected for Vote'
+                              : `Vote for this ${nomTrack === 'female' ? 'Female' : nomTrack === 'male' ? 'Male' : ''} Artist`}
+                          </span>
                         </button>
                       )}
                     </div>
@@ -794,22 +1064,31 @@ function VotePageContent() {
           )}
 
           {/* Confirm Vote Bar */}
-          {!isCurrentCategoryVoted && activeNominations.length > 0 && (
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4">
-              <div className="text-xs text-slate-600">
-                {selectedNominationId ? (
-                  <span className="font-bold text-slate-900">
-                    Ready to cast your 1 official vote in <strong>{activeCategory.name}</strong>.
-                  </span>
-                ) : (
-                  <span>Click on an artist card above to choose whom you want to vote for.</span>
-                )}
+          {selectedNominationId && (
+            <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4 animate-fade-in">
+              <div className="text-xs text-slate-700 space-y-0.5">
+                <span className="font-bold text-slate-900 block">
+                  Selected Nominee:{' '}
+                  <strong>
+                    {activeNominations.find((n) => n.id === selectedNominationId)?.artist?.stage_name ||
+                      activeNominations.find((n) => n.id === selectedNominationId)?.title}
+                  </strong>
+                </span>
+                <span className="text-[11px] text-amber-900 font-semibold">
+                  Track:{' '}
+                  {activeNominations.find((n) => n.id === selectedNominationId)?.sub_category === 'female'
+                    ? '👩 Female Award Track'
+                    : activeNominations.find((n) => n.id === selectedNominationId)?.sub_category === 'male'
+                    ? '👨 Male Award Track'
+                    : 'Award Track'}{' '}
+                  in {activeCategory.name}
+                </span>
               </div>
 
               <div className="flex items-center gap-3">
                 <button
                   onClick={handleCastCategoryVote}
-                  disabled={!selectedNominationId || isSubmittingVote}
+                  disabled={isSubmittingVote}
                   className="py-3 px-6 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shrink-0"
                 >
                   {isSubmittingVote ? (
@@ -820,7 +1099,7 @@ function VotePageContent() {
                   ) : (
                     <>
                       <Vote className="w-4 h-4" />
-                      <span>Confirm Vote ({votedCount + 1} of 8)</span>
+                      <span>Confirm Vote ({votedTracksCount + 1} of {totalTracks})</span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}
@@ -837,7 +1116,7 @@ function VotePageContent() {
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-emerald-600" />
             <span>
-              Verified Voter: <strong>+91 {voterPhone}</strong> • You have cast <strong>{votedCount} of 8</strong> votes.
+              Verified Voter: <strong>+91 {voterPhone}</strong> • You have cast <strong>{votedTracksCount} of {totalTracks}</strong> votes.
             </span>
           </div>
 

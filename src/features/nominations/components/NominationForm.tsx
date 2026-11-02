@@ -27,6 +27,7 @@ import {
 import { VideoPlayer } from '@/components/shared/VideoPlayer';
 import { isAllowedVideoType } from '@/config/r2';
 import { formatFileSize } from '@/lib/utils/formatters';
+import { isGenderedCategory } from '@/lib/constants/art-categories';
 
 interface CategoryOption {
   id: string;
@@ -81,6 +82,7 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
 
   // Performance Video Submission Details
   const [categoryId, setCategoryId] = useState(categories[0]?.id || '');
+  const [subCategory, setSubCategory] = useState<'male' | 'female' | 'general'>('male');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
 
@@ -545,6 +547,7 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
         body: JSON.stringify({
           contestId,
           categoryId,
+          subCategory: isGenderedCategory(categoryId) ? subCategory : 'general',
           title: title.trim(),
           description: description.trim(),
           uploadRecordId,
@@ -916,7 +919,15 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
             </label>
             <select
               value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
+              onChange={(e) => {
+                const newCatId = e.target.value;
+                setCategoryId(newCatId);
+                if (isGenderedCategory(newCatId)) {
+                  if (subCategory === 'general') setSubCategory('male');
+                } else {
+                  setSubCategory('general');
+                }
+              }}
               className="w-full p-2.5 rounded-xl border border-slate-300 text-xs sm:text-sm bg-white font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
             >
               {categories.map((c) => (
@@ -926,6 +937,56 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
               ))}
             </select>
           </div>
+
+          {/* Sub-Category Gender Track Selector for Categories 2, 3, 4, 5 */}
+          {isGenderedCategory(categoryId) && (
+            <div className="p-4 rounded-2xl bg-blue-50/80 border border-blue-200 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="block text-xs font-bold text-[#0f2d59] uppercase tracking-wider">
+                  Award Sub-Category Track (Male / Female) <span className="text-red-500">*</span>
+                </label>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                  Separate Male &amp; Female Awards
+                </span>
+              </div>
+              <p className="text-xs text-blue-900 leading-relaxed">
+                Is category me <strong>Male ko alag award</strong> milega aur <strong>Female ko alag award</strong> milega. Aap kis sub-category track me participate kar rahe hain?
+              </p>
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setSubCategory('male')}
+                  className={`p-3 rounded-xl border text-center font-bold text-xs sm:text-sm transition-all cursor-pointer flex flex-col items-center gap-1 ${
+                    subCategory === 'male'
+                      ? 'bg-blue-600 text-white border-blue-700 shadow-md ring-2 ring-blue-400'
+                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  <span className="text-2xl">👨</span>
+                  <span>Male Award Track</span>
+                  <span className={`text-[10px] font-normal ${subCategory === 'male' ? 'text-blue-100' : 'text-slate-500'}`}>
+                    (Male Nominee / Performer)
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSubCategory('female')}
+                  className={`p-3 rounded-xl border text-center font-bold text-xs sm:text-sm transition-all cursor-pointer flex flex-col items-center gap-1 ${
+                    subCategory === 'female'
+                      ? 'bg-pink-600 text-white border-pink-700 shadow-md ring-2 ring-pink-400'
+                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  <span className="text-2xl">👩</span>
+                  <span>Female Award Track</span>
+                  <span className={`text-[10px] font-normal ${subCategory === 'female' ? 'text-pink-100' : 'text-slate-500'}`}>
+                    (Female Nominee / Performer)
+                  </span>
+                </button>
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
