@@ -16,15 +16,66 @@ import {
   Send,
   Check,
   Crown,
+  Lock,
 } from 'lucide-react';
 import { ROLE_PRESETS, RoleCategoryKey } from '@/lib/auth/admin-constants';
+
+const ADMIN_POSITION_OPTIONS: {
+  key: RoleCategoryKey;
+  label: string;
+  badge: string;
+  subtitle: string;
+}[] = [
+  {
+    key: 'main_admin',
+    label: '👑 Main Admin (Second Main Admin - All Access)',
+    badge: 'Second Main Admin',
+    subtitle: 'All platform access, review all 8 categories, supervise & shift 4 Sub-Admins, delete/unapprove nominations, and manage voting schedule.',
+  },
+  {
+    key: 'panel_admin_1',
+    label: '🎬 Admin 1: Panel 1 (Music Video & Lead Dance - Cat 1 & 2)',
+    badge: 'Admin 1 (Panel 1)',
+    subtitle: 'Review & approve audition videos for Best Music Video (Nagpuri) & Best Dance in Video.',
+  },
+  {
+    key: 'panel_admin_2',
+    label: '🎭 Admin 2: Panel 2 (Leading Actor & Lead Singer - Cat 3 & 4)',
+    badge: 'Admin 2 (Panel 2)',
+    subtitle: 'Review & approve audition videos for Best Actor in a Leading Role & Best Singer.',
+  },
+  {
+    key: 'panel_admin_3',
+    label: '🎥 Admin 3: Panel 3 (Cinematographer & Director - Cat 5 & 6)',
+    badge: 'Admin 3 (Panel 3)',
+    subtitle: 'Review & approve audition videos for Best Cinematographer / Camera Person & Best Director.',
+  },
+  {
+    key: 'panel_admin_4',
+    label: '🎵 Admin 4: Panel 4 (Choreographer & Music Director - Cat 7 & 8)',
+    badge: 'Admin 4 (Panel 4)',
+    subtitle: 'Review & approve audition videos for Best Choreographer & Best Music Director.',
+  },
+];
 
 export default function RequestAdminAccessPage() {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [roleCategory, setRoleCategory] = useState<RoleCategoryKey>('all_access');
+  const [roleCategory, setRoleCategory] = useState<RoleCategoryKey>('main_admin');
   const [reason, setReason] = useState('');
+
+  // Slot status
+  const [slotStatus, setSlotStatus] = useState<{
+    filledSlots: Record<string, boolean>;
+    totalFilled: number;
+    allFilled: boolean;
+  }>({
+    filledSlots: {},
+    totalFilled: 0,
+    allFilled: false,
+  });
+  const [loadingSlots, setLoadingSlots] = useState(true);
 
   // OTP state
   const [otp, setOtp] = useState('');
@@ -37,6 +88,33 @@ export default function RequestAdminAccessPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+
+  // Fetch slot status on mount
+  useEffect(() => {
+    async function fetchSlots() {
+      try {
+        const res = await fetch('/api/admin/requests/slots');
+        const data = await res.json();
+        if (data.success && data.data) {
+          setSlotStatus(data.data);
+          // If default selected role is filled, select the first available slot
+          if (data.data.filledSlots['main_admin']) {
+            const available = ADMIN_POSITION_OPTIONS.find(
+              (pos) => !data.data.filledSlots[pos.key]
+            );
+            if (available) {
+              setRoleCategory(available.key);
+            }
+          }
+        }
+      } catch {
+        // Fallback gracefully
+      } finally {
+        setLoadingSlots(false);
+      }
+    }
+    fetchSlots();
+  }, []);
 
   // Cooldown countdown timer
   useEffect(() => {
@@ -90,6 +168,16 @@ export default function RequestAdminAccessPage() {
     e.preventDefault();
     setError(null);
 
+    if (slotStatus.allFilled) {
+      setError('All 5 Administrator positions are already approved and filled. Applications are closed.');
+      return;
+    }
+
+    if (slotStatus.filledSlots[roleCategory]) {
+      setError('This admin position has already been assigned and approved. Please select another available position.');
+      return;
+    }
+
     const cleanPhone = phone.replace(/\D/g, '').slice(-10);
     if (cleanPhone.length !== 10) {
       setError('Please enter a valid 10-digit mobile number.');
@@ -109,7 +197,7 @@ export default function RequestAdminAccessPage() {
     setLoading(true);
 
     try {
-      const selectedPreset = ROLE_PRESETS[roleCategory];
+      const selectedPreset = ROLE_PRESETS[roleCategory] || ROLE_PRESETS.panel_admin_1;
       const detailedReason = `[${selectedPreset.badge.toUpperCase()}] ${reason.trim()}`;
 
       const res = await fetch('/api/admin/requests/submit', {
@@ -138,7 +226,8 @@ export default function RequestAdminAccessPage() {
     }
   };
 
-  const currentPreset = ROLE_PRESETS[roleCategory];
+  const currentPreset = ROLE_PRESETS[roleCategory] || ROLE_PRESETS.panel_admin_1;
+  const isSelectedSlotFilled = Boolean(slotStatus.filledSlots[roleCategory]);
 
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 bg-grid-pattern relative">
@@ -158,6 +247,49 @@ export default function RequestAdminAccessPage() {
         </div>
 
         <div className="p-6 sm:p-8 space-y-5">
+          {/* Capacity / Slot Badge */}
+          <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs">
+            <div className="flex items-center gap-2">
+              <Shield className="w-4 h-4 text-blue-700" />
+              <span className="font-bold text-slate-800">Admin Position Slots:</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="font-mono font-bold text-blue-900">
+                {slotStatus.totalFilled} / 5 Approved
+              </span>
+              {slotStatus.allFilled ? (
+                <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-800 font-extrabold text-[10px]">
+                  ALL FILLED
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-extrabold text-[10px]">
+                  {5 - slotStatus.totalFilled} AVAILABLE
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Lockdown Banner when all 5 spots are filled */}
+          {slotStatus.allFilled && !submitted && (
+            <div className="p-4 rounded-2xl bg-red-50 border border-red-300 text-red-900 space-y-2">
+              <div className="flex items-center gap-2 font-extrabold text-sm text-red-800">
+                <Lock className="w-4 h-4 text-red-600" />
+                <span>Admin Request Portal Locked</span>
+              </div>
+              <p className="text-xs leading-relaxed text-red-700">
+                All 5 official administrator positions (1 Second Main Admin and 4 Panel Category Admins) have already been approved and assigned. No further applications can be accepted at this time.
+              </p>
+              <div className="pt-1">
+                <Link
+                  href="/admin/login"
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-red-800 hover:text-red-950 underline"
+                >
+                  Return to Admin Login &rarr;
+                </Link>
+              </div>
+            </div>
+          )}
+
           {submitted ? (
             <div className="text-center py-6 space-y-4">
               <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
@@ -168,7 +300,7 @@ export default function RequestAdminAccessPage() {
               </h2>
               <p className="text-xs sm:text-sm text-slate-600 max-w-sm mx-auto leading-relaxed">
                 Your mobile number <strong>+91 {phone.slice(-10)}</strong> has been verified via SMS OTP for{' '}
-                <strong className="text-blue-900">{currentPreset.label}</strong>. The Main Super Admin will review your application and can approve or fine-tune your feature permissions. Once approved, you can log in immediately via the Delegated Sub-Admin tab.
+                <strong className="text-blue-900">{currentPreset.label}</strong>. Once approved by the Main Super Administrator or Second Main Admin, you will be able to log in immediately via the Delegated Sub-Admin tab.
               </p>
               <div className="pt-4 flex justify-center">
                 <Link
@@ -179,7 +311,7 @@ export default function RequestAdminAccessPage() {
                 </Link>
               </div>
             </div>
-          ) : (
+          ) : !slotStatus.allFilled && (
             <form onSubmit={handleSubmit} className="space-y-4">
               {error && (
                 <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-start gap-2">
@@ -306,16 +438,16 @@ export default function RequestAdminAccessPage() {
                 </div>
               </div>
 
-              {/* Requested Functional Role (Including ALL ACCESS Option) */}
+              {/* Requested Functional Role Dropdown */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                    Requested Functional Role
+                    Select Desired Admin Position
                   </label>
-                  {roleCategory === 'all_access' && (
+                  {roleCategory === 'main_admin' && (
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
                       <Crown className="w-3 h-3 text-amber-600" />
-                      All Access Mode
+                      Second Main Admin
                     </span>
                   )}
                 </div>
@@ -323,27 +455,43 @@ export default function RequestAdminAccessPage() {
                 <select
                   value={roleCategory}
                   onChange={(e) => setRoleCategory(e.target.value as RoleCategoryKey)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm bg-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs sm:text-sm bg-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-600"
                 >
-                  <option value="all_access">⭐ All Platform Delegated Access (All Categories)</option>
-                  <option value="video_reviewer">🎬 Video Performance Reviewer (Jury Only)</option>
-                  <option value="contest_coordinator">⏱️ Contest Lifecycle Coordinator</option>
-                  <option value="auditor">🔍 Voting Integrity &amp; Audit Inspector</option>
-                  <option value="data_analyst">📊 Results &amp; Analytics Officer</option>
+                  {ADMIN_POSITION_OPTIONS.map((pos) => {
+                    const isFilled = Boolean(slotStatus.filledSlots[pos.key]);
+                    return (
+                      <option
+                        key={pos.key}
+                        value={pos.key}
+                        disabled={isFilled}
+                        className={isFilled ? 'text-slate-400 bg-slate-100' : 'text-slate-900'}
+                      >
+                        {isFilled ? `🔒 [FILLED] ${pos.label}` : pos.label}
+                      </option>
+                    );
+                  })}
                 </select>
 
                 {/* Scope Preview Card */}
-                <div className="p-3 rounded-xl bg-blue-50/70 border border-blue-200 text-xs text-blue-950 space-y-1.5">
-                  <div className="font-bold flex items-center gap-1.5 text-[#0f2d59]">
-                    <span>Scope:</span>
-                    <span>{currentPreset.label}</span>
+                <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200 text-xs text-blue-950 space-y-1.5">
+                  <div className="font-bold flex items-center justify-between gap-1.5 text-[#0f2d59]">
+                    <span>Scope: {currentPreset.badge}</span>
+                    {isSelectedSlotFilled ? (
+                      <span className="text-[10px] font-extrabold text-red-600 uppercase">
+                        Position Already Assigned
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-extrabold text-emerald-700 uppercase">
+                        Position Open
+                      </span>
+                    )}
                   </div>
                   <p className="text-[11px] text-blue-800 leading-relaxed">
                     {currentPreset.description}
                   </p>
                   <div className="pt-1 flex flex-wrap gap-1.5">
                     {Object.entries(currentPreset.permissions).map(([key, val]) => {
-                      if (!val || key === 'can_manage_admins') return null;
+                      if (!val) return null;
                       const niceName = key
                         .replace('can_', '')
                         .replace('_', ' ')
@@ -371,7 +519,7 @@ export default function RequestAdminAccessPage() {
                   rows={2}
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
-                  placeholder="Explain why you require admin access, which committee or jury role you serve, and why this scope is requested."
+                  placeholder="Explain why you require admin access, which jury committee or role you serve, and why this scope is requested."
                   required
                   className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
@@ -379,7 +527,7 @@ export default function RequestAdminAccessPage() {
 
               <button
                 type="submit"
-                disabled={loading || !otpSent || otp.length !== 6}
+                disabled={loading || !otpSent || otp.length !== 6 || isSelectedSlotFilled || slotStatus.allFilled}
                 className="w-full py-3 px-4 rounded-xl bg-[#0f2d59] hover:bg-blue-900 disabled:bg-slate-400 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
               >
                 {loading ? (

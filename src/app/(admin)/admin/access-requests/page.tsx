@@ -27,6 +27,7 @@ import {
   Filter,
   BarChart3,
   Flame,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { ROLE_PRESETS, RoleCategoryKey } from '@/lib/auth/admin-constants';
 
@@ -37,6 +38,8 @@ interface AccessRequest {
   email: string;
   reason: string;
   status: 'pending' | 'approved' | 'rejected' | 'revoked';
+  role_type?: 'co_admin' | 'panel_admin';
+  assigned_panel?: 1 | 2 | 3 | 4 | null;
   permissions: {
     requested_role?: string;
     can_moderate_videos?: boolean;
@@ -44,6 +47,7 @@ interface AccessRequest {
     can_view_audit_logs?: boolean;
     can_export_data?: boolean;
     can_view_analytics?: boolean;
+    can_manage_admins?: boolean;
   };
   is_phone_verified: boolean;
   reviewed_by?: string;
@@ -56,18 +60,18 @@ const PERMISSION_METADATA = [
   {
     key: 'can_moderate_videos',
     label: 'Video Moderation',
-    desc: 'Approve, reject, or flag audition videos and performances',
+    desc: 'Approve, reject, unapprove, or flag audition videos and performances',
     icon: Video,
   },
   {
     key: 'can_manage_contest',
-    label: 'Contest Timeline',
-    desc: 'Modify contest stages, extend voting window, set dates',
+    label: 'Contest Schedule & Voting Controls',
+    desc: 'Start/stop voting, modify live countdown dates & times',
     icon: Flame,
   },
   {
     key: 'can_view_audit_logs',
-    label: 'Audit Trail',
+    label: 'Audit Trail Ledger',
     desc: 'Inspect voter IP logs, tamper detection, and security events',
     icon: History,
   },
@@ -83,6 +87,39 @@ const PERMISSION_METADATA = [
     desc: 'View live turnout counters, leaderboard, and district statistics',
     icon: BarChart3,
   },
+  {
+    key: 'can_manage_admins',
+    label: 'Staff Admin Governance',
+    desc: 'Approve, shift categories, and supervise the 4 Panel Admins',
+    icon: Crown,
+  },
+] as const;
+
+const PANEL_DEFINITIONS = [
+  {
+    id: 1,
+    name: 'Admin 1: Panel 1',
+    categories: 'Cat 1 & 2: Music Video (Nagpuri) & Lead Dance',
+    roleKey: 'panel_admin_1',
+  },
+  {
+    id: 2,
+    name: 'Admin 2: Panel 2',
+    categories: 'Cat 3 & 4: Leading Actor & Lead Singer',
+    roleKey: 'panel_admin_2',
+  },
+  {
+    id: 3,
+    name: 'Admin 3: Panel 3',
+    categories: 'Cat 5 & 6: Cinematographer & Director',
+    roleKey: 'panel_admin_3',
+  },
+  {
+    id: 4,
+    name: 'Admin 4: Panel 4',
+    categories: 'Cat 7 & 8: Choreographer & Music Director',
+    roleKey: 'panel_admin_4',
+  },
 ] as const;
 
 export default function AdminAccessRequestsPage() {
@@ -95,8 +132,10 @@ export default function AdminAccessRequestsPage() {
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'approved' | 'revoked' | 'rejected'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Editable Permissions per request ID
+  // Editable state per request ID
   const [selectedPermissions, setSelectedPermissions] = useState<Record<string, Record<string, boolean>>>({});
+  const [selectedRoleType, setSelectedRoleType] = useState<Record<string, 'co_admin' | 'panel_admin'>>({});
+  const [selectedPanel, setSelectedPanel] = useState<Record<string, 1 | 2 | 3 | 4 | null>>({});
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const fetchRequests = async () => {
@@ -108,20 +147,32 @@ export default function AdminAccessRequestsPage() {
       if (!res.ok) {
         throw new Error(data.error || 'Failed to fetch access requests.');
       }
-      setRequests(data.requests || []);
+      const list: AccessRequest[] = data.requests || [];
+      setRequests(list);
 
-      // Initialize permissions mapping from database records
+      // Initialize state mappings
       const permsMap: Record<string, Record<string, boolean>> = {};
-      data.requests?.forEach((req: AccessRequest) => {
+      const roleMap: Record<string, 'co_admin' | 'panel_admin'> = {};
+      const panelMap: Record<string, 1 | 2 | 3 | 4 | null> = {};
+
+      list.forEach((req) => {
         permsMap[req.id] = {
-          can_moderate_videos: Boolean(req.permissions?.can_moderate_videos),
+          can_moderate_videos: Boolean(req.permissions?.can_moderate_videos ?? true),
           can_manage_contest: Boolean(req.permissions?.can_manage_contest),
           can_view_audit_logs: Boolean(req.permissions?.can_view_audit_logs),
           can_export_data: Boolean(req.permissions?.can_export_data),
           can_view_analytics: Boolean(req.permissions?.can_view_analytics ?? true),
+          can_manage_admins: Boolean(req.permissions?.can_manage_admins),
         };
+
+        const isCoAdmin = req.role_type === 'co_admin' || req.permissions?.requested_role === 'main_admin';
+        roleMap[req.id] = isCoAdmin ? 'co_admin' : 'panel_admin';
+        panelMap[req.id] = (req.assigned_panel as 1 | 2 | 3 | 4 | null) ?? (isCoAdmin ? null : 1);
       });
+
       setSelectedPermissions(permsMap);
+      setSelectedRoleType(roleMap);
+      setSelectedPanel(panelMap);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -144,33 +195,41 @@ export default function AdminAccessRequestsPage() {
     }));
   };
 
-  // Quick Preset Role Application (Shift Access at any time!)
-  const handleApplyPreset = (reqId: string, presetKey: 'all_access' | 'video_reviewer' | 'contest_coordinator' | 'auditor' | 'data_analyst' | 'clear') => {
-    if (presetKey === 'clear') {
+  // Direct Panel / Role Shift Handler
+  const handleShiftRole = (
+    reqId: string,
+    target: 'second_main_admin' | 'panel_1' | 'panel_2' | 'panel_3' | 'panel_4'
+  ) => {
+    if (target === 'second_main_admin') {
+      setSelectedRoleType((prev) => ({ ...prev, [reqId]: 'co_admin' }));
+      setSelectedPanel((prev) => ({ ...prev, [reqId]: null }));
       setSelectedPermissions((prev) => ({
         ...prev,
         [reqId]: {
-          can_moderate_videos: false,
+          can_moderate_videos: true,
+          can_manage_contest: true,
+          can_view_audit_logs: true,
+          can_export_data: true,
+          can_view_analytics: true,
+          can_manage_admins: true,
+        },
+      }));
+    } else {
+      const panelNum = parseInt(target.replace('panel_', ''), 10) as 1 | 2 | 3 | 4;
+      setSelectedRoleType((prev) => ({ ...prev, [reqId]: 'panel_admin' }));
+      setSelectedPanel((prev) => ({ ...prev, [reqId]: panelNum }));
+      setSelectedPermissions((prev) => ({
+        ...prev,
+        [reqId]: {
+          can_moderate_videos: true,
           can_manage_contest: false,
           can_view_audit_logs: false,
           can_export_data: false,
-          can_view_analytics: false,
+          can_view_analytics: true,
+          can_manage_admins: false,
         },
       }));
-      return;
     }
-
-    const preset = ROLE_PRESETS[presetKey];
-    setSelectedPermissions((prev) => ({
-      ...prev,
-      [reqId]: {
-        can_moderate_videos: preset.permissions.can_moderate_videos,
-        can_manage_contest: preset.permissions.can_manage_contest,
-        can_view_audit_logs: preset.permissions.can_view_audit_logs,
-        can_export_data: preset.permissions.can_export_data,
-        can_view_analytics: preset.permissions.can_view_analytics,
-      },
-    }));
   };
 
   // Update Status & Shift Privileges
@@ -185,12 +244,17 @@ export default function AdminAccessRequestsPage() {
 
     try {
       const perms = selectedPermissions[reqId] || {};
+      const role_type = selectedRoleType[reqId] || 'panel_admin';
+      const assigned_panel = role_type === 'co_admin' ? null : selectedPanel[reqId] || 1;
+
       const res = await fetch('/api/admin/requests', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: reqId,
           status: newStatus,
+          role_type,
+          assigned_panel,
           permissions: perms,
         }),
       });
@@ -200,7 +264,10 @@ export default function AdminAccessRequestsPage() {
         throw new Error(data.error || 'Failed to update request privileges.');
       }
 
-      setActionSuccess(actionLabel || `Staff permissions successfully updated to ${newStatus.toUpperCase()}.`);
+      setActionSuccess(
+        actionLabel ||
+          `Admin access updated to ${newStatus.toUpperCase()} (Role: ${role_type === 'co_admin' ? 'Second Main Admin' : `Panel ${assigned_panel}`}).`
+      );
       await fetchRequests();
     } catch (err: any) {
       setError(err.message);
@@ -211,7 +278,7 @@ export default function AdminAccessRequestsPage() {
 
   // Delete Request
   const handleDeleteRequest = async (reqId: string, name: string) => {
-    if (!confirm(`Are you sure you want to permanently delete the request from ${name}?`)) {
+    if (!confirm(`Are you sure you want to permanently delete the admin request from ${name}?`)) {
       return;
     }
 
@@ -229,7 +296,7 @@ export default function AdminAccessRequestsPage() {
         throw new Error(data.error || 'Failed to delete request.');
       }
 
-      setActionSuccess(`Access request for ${name} deleted successfully.`);
+      setActionSuccess(`Access request for ${name} permanently deleted.`);
       await fetchRequests();
     } catch (err: any) {
       setError(err.message);
@@ -241,11 +308,9 @@ export default function AdminAccessRequestsPage() {
   // Filtered list
   const filteredRequests = useMemo(() => {
     return requests.filter((req) => {
-      // Tab filter
       if (activeTab !== 'all' && req.status !== activeTab) {
         return false;
       }
-      // Search filter
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchName = req.full_name?.toLowerCase().includes(q);
@@ -276,13 +341,13 @@ export default function AdminAccessRequestsPage() {
         <div>
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-100 text-[#0f2d59] text-xs font-bold uppercase tracking-wider mb-2">
             <Shield className="w-3.5 h-3.5" />
-            <span>Main Super Admin Console</span>
+            <span>Admin Governance &amp; Staff Shift Console</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0f2d59]">
             Sub-Admin Access Governance &amp; Role Management
           </h1>
           <p className="text-xs sm:text-sm text-slate-600 mt-1 max-w-2xl leading-relaxed">
-            Review incoming administrator applications, assign all-access or granular feature categories, and shift or revoke staff privileges at any time in real-time.
+            Supervise staff admins, approve applications, and freely switch Admin 1, 2, 3, or 4 between evaluation category panels or elevate to Second Main Admin in real-time.
           </p>
         </div>
 
@@ -317,7 +382,7 @@ export default function AdminAccessRequestsPage() {
         <div className="flex flex-wrap gap-1.5 text-xs font-bold">
           <button
             onClick={() => setActiveTab('all')}
-            className={`px-3 py-1.5 rounded-xl transition-all ${
+            className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
               activeTab === 'all'
                 ? 'bg-[#0f2d59] text-white shadow-xs'
                 : 'text-slate-600 hover:bg-slate-100'
@@ -328,7 +393,7 @@ export default function AdminAccessRequestsPage() {
 
           <button
             onClick={() => setActiveTab('pending')}
-            className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'pending'
                 ? 'bg-amber-600 text-white shadow-xs'
                 : 'text-amber-800 bg-amber-50 hover:bg-amber-100'
@@ -340,7 +405,7 @@ export default function AdminAccessRequestsPage() {
 
           <button
             onClick={() => setActiveTab('approved')}
-            className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'approved'
                 ? 'bg-emerald-600 text-white shadow-xs'
                 : 'text-emerald-800 bg-emerald-50 hover:bg-emerald-100'
@@ -352,7 +417,7 @@ export default function AdminAccessRequestsPage() {
 
           <button
             onClick={() => setActiveTab('revoked')}
-            className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'revoked'
                 ? 'bg-rose-700 text-white shadow-xs'
                 : 'text-rose-800 bg-rose-50 hover:bg-rose-100'
@@ -364,7 +429,7 @@ export default function AdminAccessRequestsPage() {
 
           <button
             onClick={() => setActiveTab('rejected')}
-            className={`px-3 py-1.5 rounded-xl transition-all ${
+            className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
               activeTab === 'rejected'
                 ? 'bg-slate-700 text-white shadow-xs'
                 : 'text-slate-600 hover:bg-slate-100'
@@ -408,14 +473,8 @@ export default function AdminAccessRequestsPage() {
           {filteredRequests.map((req) => {
             const isUpdating = updatingId === req.id;
             const perms = selectedPermissions[req.id] || {};
-            const isAllAccess =
-              perms.can_moderate_videos &&
-              perms.can_manage_contest &&
-              perms.can_view_audit_logs &&
-              perms.can_export_data &&
-              perms.can_view_analytics;
-
-            const requestedRole = req.permissions?.requested_role;
+            const currentRole = selectedRoleType[req.id] || 'panel_admin';
+            const currentPanel = selectedPanel[req.id] ?? 1;
 
             return (
               <div
@@ -432,7 +491,7 @@ export default function AdminAccessRequestsPage() {
               >
                 <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
                   {/* Left Info Column */}
-                  <div className="space-y-3.5 flex-1">
+                  <div className="space-y-4 flex-1">
                     {/* Header Row */}
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-base sm:text-lg font-extrabold text-slate-900">
@@ -462,17 +521,18 @@ export default function AdminAccessRequestsPage() {
                         </span>
                       )}
 
-                      {/* Requested Role Highlight */}
-                      {requestedRole === 'all_access' ? (
-                        <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-900 border border-amber-300 flex items-center gap-1 shadow-xs">
+                      {/* Current Assigned Role Badge */}
+                      {currentRole === 'co_admin' ? (
+                        <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-950 border border-amber-400 flex items-center gap-1 shadow-xs">
                           <Crown className="w-3 h-3 text-amber-600" />
-                          ⭐ ALL ACCESS REQUESTED
+                          👑 SECOND MAIN ADMIN (ALL ACCESS)
                         </span>
-                      ) : requestedRole ? (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-                          Requested: {requestedRole.replace('_', ' ')}
+                      ) : (
+                        <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-950 border border-blue-300 flex items-center gap-1 shadow-xs">
+                          <Video className="w-3 h-3 text-blue-700" />
+                          🎬 PANEL {currentPanel} ADMIN
                         </span>
-                      ) : null}
+                      )}
                     </div>
 
                     {/* Metadata line */}
@@ -502,59 +562,73 @@ export default function AdminAccessRequestsPage() {
                       {req.reason}
                     </div>
 
-                    {/* ──────────────── GRANULAR PERMISSIONS & SHIFT CONTROLS ──────────────── */}
-                    <div className="pt-2 space-y-2.5">
+                    {/* ──────────────── CATEGORY & ROLE SHIFT CONTROLS ──────────────── */}
+                    <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200 space-y-3">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                          <Sliders className="w-3.5 h-3.5 text-blue-700" />
-                          <span>Granular Feature Categories &amp; Access Shift:</span>
+                        <p className="text-xs font-extrabold text-[#0f2d59] uppercase tracking-wider flex items-center gap-1.5">
+                          <ArrowRightLeft className="w-4 h-4 text-blue-700" />
+                          <span>Panel Category Shift &amp; Role Assignment:</span>
                         </p>
-
-                        {/* Quick Presets / Shift Access Buttons */}
-                        <div className="flex flex-wrap items-center gap-1 text-[11px]">
-                          <span className="text-slate-400 text-[10px] uppercase font-bold mr-1">
-                            Quick Shift:
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleApplyPreset(req.id, 'all_access')}
-                            className="px-2 py-0.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold border border-amber-300 transition-colors flex items-center gap-1 cursor-pointer"
-                          >
-                            <Crown className="w-2.5 h-2.5 text-amber-600" />
-                            <span>All Access</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleApplyPreset(req.id, 'video_reviewer')}
-                            className="px-2 py-0.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-900 font-medium border border-blue-200 transition-colors cursor-pointer"
-                          >
-                            Jury Only
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleApplyPreset(req.id, 'contest_coordinator')}
-                            className="px-2 py-0.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-900 font-medium border border-blue-200 transition-colors cursor-pointer"
-                          >
-                            Contest Lead
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleApplyPreset(req.id, 'auditor')}
-                            className="px-2 py-0.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-900 font-medium border border-blue-200 transition-colors cursor-pointer"
-                          >
-                            Auditor
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleApplyPreset(req.id, 'clear')}
-                            className="px-1.5 py-0.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 text-[10px] cursor-pointer"
-                          >
-                            Clear
-                          </button>
-                        </div>
+                        <span className="text-[11px] text-blue-800 font-semibold">
+                          Click to instantly switch admin panel:
+                        </span>
                       </div>
 
-                      {/* 5 Distinct Granular Toggles */}
+                      {/* 5 Quick Shift Buttons */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 text-xs">
+                        {/* Second Main Admin Shift */}
+                        <button
+                          type="button"
+                          onClick={() => handleShiftRole(req.id, 'second_main_admin')}
+                          className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                            currentRole === 'co_admin'
+                              ? 'bg-amber-100 border-amber-400 ring-2 ring-amber-300 text-amber-950 shadow-xs'
+                              : 'bg-white border-slate-200 hover:bg-amber-50/50 text-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5 font-bold text-amber-900">
+                            <Crown className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            <span>Second Main Admin</span>
+                          </div>
+                          <p className="text-[10px] text-slate-600 mt-0.5 line-clamp-2">
+                            All categories + staff governance
+                          </p>
+                        </button>
+
+                        {/* Panel 1, 2, 3, 4 Shifts */}
+                        {PANEL_DEFINITIONS.map((p) => {
+                          const isActive = currentRole === 'panel_admin' && currentPanel === p.id;
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => handleShiftRole(req.id, `panel_${p.id}` as any)}
+                              className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                                isActive
+                                  ? 'bg-blue-100 border-blue-400 ring-2 ring-blue-300 text-blue-950 shadow-xs'
+                                  : 'bg-white border-slate-200 hover:bg-blue-50/50 text-slate-700'
+                              }`}
+                            >
+                              <div className="flex items-center gap-1.5 font-bold text-blue-950">
+                                <Video className="w-3.5 h-3.5 text-blue-700 shrink-0" />
+                                <span>{p.name}</span>
+                              </div>
+                              <p className="text-[10px] text-slate-600 mt-0.5 line-clamp-2">
+                                {p.categories}
+                              </p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* ──────────────── GRANULAR PERMISSIONS TOGGLES ──────────────── */}
+                    <div className="space-y-2 pt-1">
+                      <p className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                        <Sliders className="w-3.5 h-3.5 text-blue-700" />
+                        <span>Feature Privileges (Customize if needed):</span>
+                      </p>
+
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 text-xs">
                         {PERMISSION_METADATA.map((item) => {
                           const Icon = item.icon;
@@ -600,7 +674,9 @@ export default function AdminAccessRequestsPage() {
                           handleUpdateStatus(
                             req.id,
                             'approved',
-                            `Access approved for ${req.full_name} with selected permissions.`
+                            `Access approved for ${req.full_name} as ${
+                              currentRole === 'co_admin' ? 'Second Main Admin' : `Panel ${currentPanel} Admin`
+                            }.`
                           )
                         }
                         disabled={isUpdating}

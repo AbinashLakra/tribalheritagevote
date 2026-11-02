@@ -195,14 +195,14 @@ export async function POST(request: NextRequest) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// DELETE HANDLER: SUPER ADMIN PERMANENT DATABASE DELETION
+// DELETE HANDLER: SUPER ADMIN & SECOND MAIN ADMIN PERMANENT DATABASE DELETION
 // ─────────────────────────────────────────────────────────────────
 export async function DELETE(request: NextRequest) {
   try {
     const session = await getAdminSession();
-    if (!session || session.role !== 'super_admin') {
+    if (!session || (session.role !== 'super_admin' && session.role !== 'co_admin')) {
       return NextResponse.json(
-        { success: false, error: 'Forbidden: Only the Main Super Admin can permanently delete records from the database.' },
+        { success: false, error: 'Forbidden: Super Admin or Second Main Admin privileges required to permanently delete records.' },
         { status: 403 }
       );
     }

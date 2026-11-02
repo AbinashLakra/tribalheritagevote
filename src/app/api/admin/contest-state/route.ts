@@ -2,47 +2,71 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getAdminSession } from '@/lib/auth/admin-session';
 import { canTransitionContest } from '@/lib/constants/contest-states';
 import { validateRequestBody } from '@/lib/security/request-validation';
 import { logAuditEvent } from '@/lib/security/audit';
 
-const stateTransitionSchema = z.object({
+const contestUpdateSchema = z.object({
   contestId: z.string().uuid('Invalid contest ID'),
-  newState: z.enum(['draft', 'scheduled', 'open', 'paused', 'closed', 'finalized']),
-  reason: z.string().optional(),
+  newState: z.enum(['draft', 'scheduled', 'open', 'paused', 'closed', 'finalized']).optional(),
+  votingStartAt: z.string().optional(),
   votingEndAt: z.string().optional(),
+  reason: z.string().optional(),
 });
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    // 1. Dual-Auth: Admin Cookie Session or Supabase Auth User
+    const adminSession = await getAdminSession();
+    let isAuthorized = false;
+    let actorId = 'super-admin';
+    let actorName = 'Main Administrator';
 
-    if (authError || !user) {
+    if (adminSession) {
+      if (
+        adminSession.role === 'super_admin' ||
+        adminSession.role === 'co_admin' ||
+        adminSession.permissions?.can_manage_contest
+      ) {
+        isAuthorized = true;
+        actorId = adminSession.adminId || adminSession.username;
+        actorName = adminSession.name || adminSession.username;
+      }
+    }
+
+    if (!isAuthorized) {
+      const supabase = await createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user) {
+        const admin = createAdminClient();
+        const { data: role } = await admin
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', user.id)
+          .in('role', ['admin', 'super_admin'])
+          .maybeSingle();
+
+        if (role) {
+          isAuthorized = true;
+          actorId = user.id;
+          actorName = user.email || 'Staff Admin';
+        }
+      }
+    }
+
+    if (!isAuthorized) {
       return NextResponse.json(
-        { success: false, error: 'Unauthorized: Admin access required.' },
+        { success: false, error: 'Unauthorized: Super Admin or Second Main Admin access required.' },
         { status: 401 }
       );
     }
 
-    const admin = createAdminClient();
-
-    // Check admin role
-    const { data: role } = await admin
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['admin', 'super_admin'])
-      .maybeSingle();
-
-    if (!role) {
-      return NextResponse.json(
-        { success: false, error: 'Forbidden: Admin role required for contest lifecycle controls.' },
-        { status: 403 }
-      );
-    }
-
-    const validation = await validateRequestBody(request, stateTransitionSchema);
+    // 2. Validate Request Body
+    const validation = await validateRequestBody(request, contestUpdateSchema);
     if (!validation.success) {
       return NextResponse.json(
         { success: false, error: validation.error },
@@ -50,9 +74,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { contestId, newState, reason, votingEndAt } = validation.data;
+    const { contestId, newState, votingStartAt, votingEndAt, reason } = validation.data;
 
-    // Fetch existing contest
+    const admin = createAdminClient();
+
+    // 3. Fetch existing contest record
     const { data: contest, error: fetchError } = await admin
       .from('contests')
       .select('*')
@@ -61,60 +87,71 @@ export async function POST(request: NextRequest) {
 
     if (fetchError || !contest) {
       return NextResponse.json(
-        { success: false, error: 'Contest not found' },
+        { success: false, error: 'Contest record not found in the database.' },
         { status: 404 }
       );
     }
 
     const previousState = contest.status;
-
-    // Check valid transition
-    if (!canTransitionContest(previousState, newState)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Invalid transition: Cannot transition contest from '${previousState}' to '${newState}'.`,
-        },
-        { status: 400 }
-      );
-    }
-
-    // Reopening Policy Verification
-    const isReopening = previousState === 'closed' && newState === 'open';
-    if (isReopening) {
-      if (!reason || reason.trim().length < 10) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: 'A mandatory written justification (minimum 10 characters) is required to reopen voting.',
-          },
-          { status: 400 }
-        );
-      }
-
-      if (!votingEndAt || new Date(votingEndAt) <= new Date()) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: 'A valid future closing date and time is required to reopen voting.',
-          },
-          { status: 400 }
-        );
-      }
-    }
-
-    // Prepare update payload
     const updatePayload: Record<string, unknown> = {
-      status: newState,
       updated_at: new Date().toISOString(),
     };
 
-    if (isReopening) {
-      updatePayload.reopening_reason = reason;
-      updatePayload.voting_end_at = votingEndAt;
+    let transitionMessage = '';
+
+    // 4. Handle State Transition if requested
+    if (newState && newState !== previousState) {
+      if (!canTransitionContest(previousState, newState)) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Invalid transition: Cannot move contest from '${previousState}' to '${newState}'.`,
+          },
+          { status: 400 }
+        );
+      }
+
+      // Reopening Policy Verification
+      const isReopening = previousState === 'closed' && newState === 'open';
+      if (isReopening) {
+        if (!reason || reason.trim().length < 10) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'A mandatory written justification (minimum 10 characters) is required to reopen voting.',
+            },
+            { status: 400 }
+          );
+        }
+
+        if (!votingEndAt || new Date(votingEndAt) <= new Date()) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'A valid future closing date and time is required to reopen voting.',
+            },
+            { status: 400 }
+          );
+        }
+        updatePayload.reopening_reason = reason;
+      }
+
+      updatePayload.status = newState;
+      transitionMessage += `Contest status changed to ${newState.toUpperCase()}. `;
     }
 
-    // Update contest state
+    // 5. Handle Voting Start & End Schedule Updates
+    if (votingStartAt) {
+      updatePayload.voting_start_at = new Date(votingStartAt).toISOString();
+      transitionMessage += `Voting start scheduled for ${new Date(votingStartAt).toLocaleString('en-IN')}. `;
+    }
+
+    if (votingEndAt) {
+      updatePayload.voting_end_at = new Date(votingEndAt).toISOString();
+      transitionMessage += `Voting end / countdown target updated to ${new Date(votingEndAt).toLocaleString('en-IN')}. `;
+    }
+
+    // 6. Update Contest Record
     const { data: updatedContest, error: updateError } = await admin
       .from('contests')
       .update(updatePayload)
@@ -124,39 +161,46 @@ export async function POST(request: NextRequest) {
 
     if (updateError || !updatedContest) {
       return NextResponse.json(
-        { success: false, error: updateError?.message || 'Failed to update contest state' },
+        { success: false, error: updateError?.message || 'Failed to update contest settings.' },
         { status: 500 }
       );
     }
 
-    // Record lifecycle event
-    await admin.from('contest_events').insert({
-      contest_id: contestId,
-      event_type: `contest_${newState}`,
-      previous_state: previousState,
-      new_state: newState,
-      actor_id: user.id,
-      reason: reason || null,
-      metadata: { isReopening, votingEndAt },
-    });
-
-    // Record audit log
+    // 7. Audit log & Lifecycle event
     await logAuditEvent({
-      actorId: user.id,
-      action: `contest_state_changed_to_${newState}`,
+      actorId,
+      action: 'contest_lifecycle_updated',
       targetEntity: 'contests',
       targetId: contestId,
-      details: { previousState, newState, reason, votingEndAt },
+      details: {
+        actor: actorName,
+        previousState,
+        newState: newState || previousState,
+        votingStartAt,
+        votingEndAt,
+        reason,
+      },
     });
+
+    if (newState && newState !== previousState) {
+      await admin.from('contest_events').insert({
+        contest_id: contestId,
+        event_type: `contest_${newState}`,
+        previous_state: previousState,
+        new_state: newState,
+        actor_id: actorId,
+        reason: reason || null,
+        metadata: { votingStartAt, votingEndAt },
+      });
+    }
 
     return NextResponse.json({
       success: true,
       data: updatedContest,
-      message: `Contest state successfully transitioned to ${newState.toUpperCase()}.`,
+      message: transitionMessage.trim() || 'Contest settings successfully updated in real-time.',
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Error changing contest state';
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
-

@@ -45,15 +45,44 @@ export async function POST(req: NextRequest) {
       if (existing.status === 'approved') {
         return NextResponse.json({
           success: true,
-          message: 'Your admin access is already APPROVED! You can log in via the Delegated Sub-Admin tab.',
+          message: 'Your admin access is already APPROVED! You can log in via the Delegated Sub-Admin tab using your email and mobile number.',
           status: 'approved',
         });
       }
     }
 
-    // Determine initial requested permissions based on role category preset
-    const validKey = (role_category in ROLE_PRESETS ? role_category : 'all_access') as RoleCategoryKey;
+    // Determine requested role category preset
+    const validKey = (role_category in ROLE_PRESETS ? role_category : 'panel_admin_1') as RoleCategoryKey;
     const preset = ROLE_PRESETS[validKey];
+
+    // Check if this specific admin position is already approved and filled!
+    const { data: approvedAdmins } = await admin
+      .from('admin_access_requests')
+      .select('id, role_type, assigned_panel, permissions')
+      .eq('status', 'approved');
+
+    const isSlotTaken = (approvedAdmins || []).some((adm) => {
+      if (preset.role_type === 'co_admin') {
+        return adm.role_type === 'co_admin' || adm.permissions?.requested_role === 'main_admin';
+      }
+      if (preset.role_type === 'panel_admin' && preset.assigned_panel) {
+        return (
+          adm.assigned_panel === preset.assigned_panel ||
+          adm.permissions?.requested_role === `panel_admin_${preset.assigned_panel}`
+        );
+      }
+      return false;
+    });
+
+    if (isSlotTaken) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `The requested position (${preset.label}) is already approved and filled. Please select an available panel position or contact the Super Administrator.`,
+        },
+        { status: 400 }
+      );
+    }
 
     const initialPermissions = {
       requested_role: validKey,
@@ -63,7 +92,7 @@ export async function POST(req: NextRequest) {
       can_view_audit_logs: preset.permissions.can_view_audit_logs,
       can_export_data: preset.permissions.can_export_data,
       can_view_analytics: preset.permissions.can_view_analytics,
-      can_manage_admins: false,
+      can_manage_admins: preset.permissions.can_manage_admins,
     };
 
     // Insert or update request
@@ -77,6 +106,8 @@ export async function POST(req: NextRequest) {
           reason: reason.trim(),
           status: 'pending',
           is_phone_verified: true,
+          role_type: preset.role_type,
+          assigned_panel: preset.assigned_panel,
           permissions: initialPermissions,
           updated_at: new Date().toISOString(),
         },

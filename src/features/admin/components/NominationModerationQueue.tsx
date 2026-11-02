@@ -624,8 +624,8 @@ export function NominationModerationQueue({
                       </button>
                     )}
 
-                    {/* Prominent Super Admin Delete from Database Button */}
-                    {sessionRole === 'super_admin' && (
+                    {/* Prominent Super Admin & Second Main Admin Delete from Database Button */}
+                    {(sessionRole === 'super_admin' || sessionRole === 'co_admin') && (
                       <button
                         onClick={() =>
                           handleDeletePermanent(
