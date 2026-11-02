@@ -19,6 +19,7 @@ export async function POST(request: NextRequest) {
       district,
       language,
       tribe,
+      password,
       isDraft = false,
     } = body;
 
@@ -92,14 +93,33 @@ export async function POST(request: NextRequest) {
       );
 
       let userId = existingUser?.id;
+      const { hashArtistPassword } = await import('@/lib/auth/artist-session');
+      const passwordHash = password ? hashArtistPassword(password) : undefined;
+      const finalPassword = password || 'AdivasiVote@2026';
 
       if (!userId) {
         const { data: newUser } = await admin.auth.admin.createUser({
           email,
+          password: finalPassword,
           email_confirm: true,
-          user_metadata: { full_name: fullName || 'Adivasi Artist', phone: cleanPhone },
+          user_metadata: {
+            full_name: fullName || 'Adivasi Artist',
+            stage_name: stageName || fullName || 'Adivasi Performer',
+            phone: cleanPhone,
+            password_hash: passwordHash,
+          },
         });
         userId = newUser?.user?.id;
+      } else if (password && existingUser) {
+        await admin.auth.admin.updateUserById(userId, {
+          password: finalPassword,
+          user_metadata: {
+            ...existingUser.user_metadata,
+            full_name: fullName || existingUser.user_metadata?.full_name,
+            stage_name: stageName || fullName || existingUser.user_metadata?.stage_name,
+            password_hash: passwordHash,
+          },
+        });
       }
 
       if (userId) {

@@ -130,7 +130,7 @@ export default async function HomePage() {
             </div>
           </div>
 
-          {/* ── RIGHT COLUMN: 3 INTERACTIVE ACTION CARDS (ENGLISH) ── */}
+          {/* ── RIGHT COLUMN: 4 INTERACTIVE ACTION CARDS (ENGLISH) ── */}
           <div className="lg:col-span-5 space-y-4">
             
             {/* CARD 1: NEW REGISTRATION (ARTIST NOMINATION) */}
@@ -153,11 +153,31 @@ export default async function HomePage() {
               </Link>
             </div>
 
-            {/* CARD 2: DELEGATE / CITIZEN VOTING (GOLD ACCENT) */}
+            {/* CARD 2: ARTIST LOGIN & NOMINATION STATUS */}
             <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm hover:shadow-md transition-all p-5 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold text-slate-900 tracking-wide uppercase">
-                  2. DELEGATE / VOTER LOGIN
+                  2. ARTIST LOGIN &amp; STATUS
+                </h3>
+                <span className="text-lg">🎨</span>
+              </div>
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                Already registered? Log in with your Name/Phone &amp; Password to check if your entry is Approved, read Jury instructions, or re-submit adjustments (Up to 3 review attempts).
+              </p>
+              <Link
+                href="/artist/login"
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-blue-700 hover:bg-blue-800 text-white font-bold py-3 px-4 text-sm shadow transition-all cursor-pointer"
+              >
+                <span>Artist Login (Check Status)</span>
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
+
+            {/* CARD 3: DELEGATE / CITIZEN VOTING (GOLD ACCENT) */}
+            <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm hover:shadow-md transition-all p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-slate-900 tracking-wide uppercase">
+                  3. DELEGATE / VOTER LOGIN
                 </h3>
                 <span className="text-lg">🗳️</span>
               </div>
@@ -173,11 +193,11 @@ export default async function HomePage() {
               </Link>
             </div>
 
-            {/* CARD 3: ADMIN LOGIN (NAVY DARK ACCENT) */}
+            {/* CARD 4: ADMIN LOGIN (NAVY DARK ACCENT) */}
             <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm hover:shadow-md transition-all p-5 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold text-slate-900 tracking-wide uppercase">
-                  3. ADMIN LOGIN
+                  4. ADMIN LOGIN
                 </h3>
                 <span className="text-lg">🛡️</span>
               </div>
@@ -219,6 +239,42 @@ export default async function HomePage() {
             targetDate={targetDate}
             label={isVotingOpen ? 'Voting Closes In' : 'Voting Starts In'}
           />
+        </div>
+      </section>
+
+      {/* ── ARTIST STATUS TRACKING & RE-SUBMISSION BANNER ── */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="bg-gradient-to-r from-[#0a1c36] via-[#0f2d59] to-[#1e3a8a] rounded-3xl p-6 sm:p-10 text-white shadow-xl relative overflow-hidden">
+          <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+            <div className="lg:col-span-8 space-y-3">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-amber-300 border border-white/20 text-xs font-bold uppercase tracking-wider">
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <span>Artist Portal • 3-Strike Fair Review Guarantee</span>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+                Are You a Registered Adivasi Artist? Track Your Nomination
+              </h2>
+              <p className="text-xs sm:text-sm text-blue-100 leading-relaxed max-w-2xl">
+                Log in to your private Artist Desk to view live Jury moderation status (Approved, Under Review, or Adjustments Required). If the panel requests changes to video criteria (duration 30s-60s, size up to 100MB, cultural background), you have up to 3 evaluation attempts to re-upload your performance recording.
+              </p>
+            </div>
+
+            <div className="lg:col-span-4 flex flex-col sm:flex-row lg:flex-col gap-3 shrink-0">
+              <Link
+                href="/artist/login"
+                className="w-full py-3.5 px-6 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-sm shadow-md transition-all flex items-center justify-center gap-2 text-center cursor-pointer"
+              >
+                <span>Artist Login Desk</span>
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+              <Link
+                href="/artist/nomination"
+                className="w-full py-3 px-6 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/30 font-bold text-xs uppercase tracking-wider transition-colors flex items-center justify-center gap-2 text-center cursor-pointer"
+              >
+                <span>New Artist Nomination Form</span>
+              </Link>
+            </div>
+          </div>
         </div>
       </section>
 

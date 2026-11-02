@@ -26,6 +26,7 @@ export async function POST(req: NextRequest) {
       bio = '',
       email: inputEmail,
       avatarUrl,
+      password,
     } = body;
 
     // 1. Basic Validations
@@ -92,17 +93,36 @@ export async function POST(req: NextRequest) {
       (u) => u.email === email || u.phone === `+91${cleanPhone}`
     );
 
+    const { hashArtistPassword } = await import('@/lib/auth/artist-session');
+    const passwordHash = password ? hashArtistPassword(password) : undefined;
+    const finalPassword = password || 'AdivasiVote@2026';
+
     if (existingUser) {
       userId = existingUser.id;
+      if (password) {
+        await admin.auth.admin.updateUserById(userId, {
+          password: finalPassword,
+          user_metadata: {
+            ...existingUser.user_metadata,
+            full_name: fullName || existingUser.user_metadata?.full_name,
+            stage_name: stageName || fullName || existingUser.user_metadata?.stage_name,
+            phone: cleanPhone,
+            password_hash: passwordHash,
+          },
+        });
+      }
     } else {
       const { data: newUser, error: createError } = await admin.auth.admin.createUser({
         email,
+        password: finalPassword,
         email_confirm: true,
         user_metadata: {
           full_name: fullName || 'Adivasi Artist',
+          stage_name: stageName || fullName || 'Adivasi Performer',
           phone: cleanPhone,
           state: state || 'Odisha',
           district: district || 'Sundargarh',
+          password_hash: passwordHash,
         },
       });
 

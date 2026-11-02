@@ -39,6 +39,18 @@ export default function ArtistLayout({ children }: { children: React.ReactNode }
                 <span>Submit Video Nomination</span>
               </Link>
               <Link
+                href="/artist/nomination/status"
+                className="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:text-blue-900 hover:bg-slate-100 transition-colors flex items-center gap-1.5"
+              >
+                <span>Track Status</span>
+              </Link>
+              <Link
+                href="/artist/login"
+                className="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:text-blue-900 hover:bg-slate-100 transition-colors flex items-center gap-1.5"
+              >
+                <span>Artist Login</span>
+              </Link>
+              <Link
                 href="/artists"
                 className="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:text-blue-900 hover:bg-slate-100 transition-colors flex items-center gap-1.5"
               >

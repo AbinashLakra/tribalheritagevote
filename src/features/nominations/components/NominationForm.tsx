@@ -20,6 +20,9 @@ import {
   Camera,
   Check,
   AlertTriangle,
+  Lock,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { VideoPlayer } from '@/components/shared/VideoPlayer';
 import { isAllowedVideoType } from '@/config/r2';
@@ -70,6 +73,11 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
   const [sendingOtp, setSendingOtp] = useState(false);
   const [verifyingOtp, setVerifyingOtp] = useState(false);
   const [otpNotice, setOtpNotice] = useState<string | null>(null);
+
+  // Artist Login Password Creation
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   // Performance Video Submission Details
   const [categoryId, setCategoryId] = useState(categories[0]?.id || '');
@@ -322,6 +330,19 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
       return;
     }
 
+    // Profile Password Validation
+    if (!password || password.length < 6) {
+      setError('Please create an artist profile login password with at least 6 characters in Section 1.');
+      document.getElementById('input-password')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match. Please ensure both password fields match in Section 1.');
+      document.getElementById('input-confirm-password')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
     // Phone Verification Check
     if (!isPhoneVerified) {
       try {
@@ -424,6 +445,7 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
           experienceYears,
           bio: bio.trim(),
           avatarUrl: avatarPreview || null,
+          password: password.trim(),
         }),
       });
 
@@ -536,6 +558,7 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
           language: language.trim(),
           tribe: tribe.trim(),
           avatarUrl: avatarPreview || null,
+          password: password.trim(),
           isDraft: false,
         }),
       });
@@ -809,6 +832,63 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
               placeholder="Sundargarh, Ranchi, etc."
               className="w-full p-2.5 rounded-xl border border-slate-300 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
             />
+          </div>
+
+          {/* Profile Password Creation for Artist Login Desk */}
+          <div className="sm:col-span-2 pt-3 border-t border-slate-200 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5 text-blue-700" />
+                <span>Create Artist Profile Password (For Login &amp; Status Tracking)</span>
+              </label>
+              <span className="text-[11px] font-semibold text-blue-900 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                Key for Artist Login
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  New Profile Password <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    id="input-password"
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Min 6 characters"
+                    className="w-full p-2.5 rounded-xl border border-slate-300 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Confirm Password <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="input-confirm-password"
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Re-enter same password"
+                  className="w-full p-2.5 rounded-xl border border-slate-300 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                />
+              </div>
+            </div>
+            <p className="text-[11px] text-slate-500">
+              * Remember your Name and this password! You can log in anytime at the <strong>Artist Login Desk</strong> to view whether your nomination is Approved, view Jury review notes, or re-submit if criteria changes are requested (Up to 3 evaluation attempts).
+            </p>
           </div>
         </div>
       </div>
