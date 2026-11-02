@@ -38,7 +38,7 @@ export function VoteButton({
         const res = await fetch(`/api/voting/status?contestId=${contestId}`);
         const data = await res.json();
         if (data.success && data.data) {
-          if (data.data.hasVoted) {
+          if (data.data.votedNominationIds?.includes(nominationId)) {
             setHasVoted(true);
           }
         }
@@ -49,7 +49,7 @@ export function VoteButton({
       }
     }
     checkStatus();
-  }, [contestId]);
+  }, [contestId, nominationId]);
 
   const handleVoteClick = () => {
     router.push(`/vote?artist=${nominationId}`);
@@ -106,7 +106,7 @@ export function VoteButton({
     return (
       <div className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-forest-100 border border-forest-300 text-forest-800 font-semibold text-sm shadow-xs">
         <CheckCircle2 className="w-5 h-5 text-forest-700" />
-        <span>Vote Recorded in this Contest</span>
+        <span>Already Voted for this Artist (Vote Recorded)</span>
       </div>
     );
   }

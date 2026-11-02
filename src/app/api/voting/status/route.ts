@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 export async function GET(request: NextRequest) {
   try {
@@ -23,40 +24,51 @@ export async function GET(request: NextRequest) {
           isAuthenticated: false,
           isVerified: false,
           hasVoted: false,
+          votedCategoryIds: [],
+          votedNominationIds: [],
         },
       });
     }
 
-    // Call the RPC helper
-    const { data: statusData, error: rpcError } = await supabase.rpc('get_voter_contest_status', {
-      p_contest_id: contestId,
-    });
+    const admin = createAdminClient();
+    const { data: voterIdentity } = await admin
+      .from('voter_identities')
+      .select('id, is_verified')
+      .eq('user_id', user.id)
+      .maybeSingle();
 
-    if (rpcError) {
-      return NextResponse.json(
-        { success: false, error: rpcError.message },
-        { status: 500 }
-      );
+    if (!voterIdentity || !voterIdentity.is_verified) {
+      return NextResponse.json({
+        success: true,
+        data: {
+          isAuthenticated: true,
+          isVerified: false,
+          hasVoted: false,
+          votedCategoryIds: [],
+          votedNominationIds: [],
+        },
+      });
     }
 
-    const typedStatus = statusData as {
-      is_authenticated: boolean;
-      is_verified: boolean;
-      has_voted: boolean;
-      vote_id?: string;
-      nomination_id?: string;
-      voted_at?: string;
-    };
+    const { data: votes } = await admin
+      .from('votes')
+      .select('id, category_id, nomination_id, server_timestamp')
+      .eq('contest_id', contestId)
+      .eq('voter_id', voterIdentity.id);
+
+    const votedCategoryIds = (votes || []).map((v) => v.category_id).filter(Boolean);
+    const votedNominationIds = (votes || []).map((v) => v.nomination_id).filter(Boolean);
 
     return NextResponse.json({
       success: true,
       data: {
-        isAuthenticated: typedStatus.is_authenticated,
-        isVerified: typedStatus.is_verified,
-        hasVoted: typedStatus.has_voted,
-        voteId: typedStatus.vote_id,
-        votedNominationId: typedStatus.nomination_id,
-        votedAt: typedStatus.voted_at,
+        isAuthenticated: true,
+        isVerified: true,
+        hasVoted: votedNominationIds.length > 0,
+        votedCount: votedNominationIds.length,
+        votedCategoryIds,
+        votedNominationIds,
+        votedAt: votes?.[0]?.server_timestamp,
       },
     });
   } catch (err: unknown) {

@@ -10,18 +10,16 @@ import {
   AlertCircle,
   Loader2,
   ArrowRight,
-  ArrowLeft,
-  Smartphone,
-  Lock,
   LogOut,
   Sparkles,
   Award,
-  Video,
   MapPin,
   Clock,
   Heart,
-  ChevronRight,
   Check,
+  Lock,
+  Smartphone,
+  X,
 } from 'lucide-react';
 import { VideoPlayer } from '@/components/shared/VideoPlayer';
 import { PhoneVerificationModal } from '@/features/auth/components/PhoneVerificationModal';
@@ -77,18 +75,25 @@ function VotePageContent() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [nominationsByCategory, setNominationsByCategory] = useState<Record<string, ArtistNomination[]>>({});
   const [votedCategoryIds, setVotedCategoryIds] = useState<string[]>([]);
+  const [votedNominationIds, setVotedNominationIds] = useState<string[]>([]);
   const [ballotVotes, setBallotVotes] = useState<BallotVoteRecord[]>([]);
 
-  // Wizard Navigation State
+  // Navigation & Selection State
   const [activeCategoryId, setActiveCategoryId] = useState<string>('');
   const [selectedNominationId, setSelectedNominationId] = useState<string>('');
   const [isSubmittingVote, setIsSubmittingVote] = useState(false);
   const [voteSuccessNotice, setVoteSuccessNotice] = useState<string | null>(null);
 
-  // Modals & Timers
+  // Modal Dialogs
   const [showPhoneModal, setShowPhoneModal] = useState(false);
-  const [autoLogoutSeconds, setAutoLogoutSeconds] = useState(15);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  // Success Confirmation Popup (After casting a vote)
+  const [justVotedInfo, setJustVotedInfo] = useState<{
+    artistName: string;
+    categoryName: string;
+    totalVoted: number;
+  } | null>(null);
 
   // Fetch full ballot state from API
   const fetchBallot = async () => {
@@ -110,6 +115,7 @@ function VotePageContent() {
       setCategories(bData.categories || []);
       setNominationsByCategory(bData.nominationsByCategory || {});
       setVotedCategoryIds(bData.votedCategoryIds || []);
+      setVotedNominationIds(bData.votedNominationIds || []);
       setBallotVotes(bData.ballotVotes || []);
 
       // If voter is not verified, prompt them with verification modal
@@ -125,14 +131,28 @@ function VotePageContent() {
       // If user came via query param
       if (requestedCategorySlug) {
         const found = (bData.categories || []).find((c: Category) => c.slug === requestedCategorySlug);
-        if (found && !bData.votedCategoryIds?.includes(found.id)) {
+        if (found) {
           setActiveCategoryId(found.id);
           if (requestedArtistId) setSelectedNominationId(requestedArtistId);
           return;
         }
       }
 
-      // Default to first unvoted category
+      // If requested by artist ID directly
+      if (requestedArtistId && bData.nominationsByCategory) {
+        for (const catId of Object.keys(bData.nominationsByCategory)) {
+          const matchingNom = bData.nominationsByCategory[catId].find(
+            (n: ArtistNomination) => n.id === requestedArtistId
+          );
+          if (matchingNom) {
+            setActiveCategoryId(catId);
+            setSelectedNominationId(requestedArtistId);
+            return;
+          }
+        }
+      }
+
+      // Default to first unvoted category, or first category
       if (unvotedCats.length > 0) {
         setActiveCategoryId(unvotedCats[0].id);
       } else if (bData.categories?.length > 0) {
@@ -167,33 +187,24 @@ function VotePageContent() {
     return categories.length > 0 && votedCategoryIds.length >= categories.length;
   }, [categories, votedCategoryIds]);
 
-  // Auto-Logout Countdown Timer once all 8 votes are complete
-  useEffect(() => {
-    if (!allBallotCompleted) return;
-
-    const timer = setInterval(() => {
-      setAutoLogoutSeconds((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          handleLogout();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [allBallotCompleted]);
-
-  // Handle Logout
+  // Handle Logout (Available at any time!)
   const handleLogout = async () => {
     setIsLoggingOut(true);
     try {
+      await fetch('/api/auth/logout', { method: 'POST' });
       const supabase = createClient();
       await supabase.auth.signOut();
     } catch {
       // ignore
     }
+    setIsAuthenticated(false);
+    setIsVerified(false);
+    setVoterPhone(null);
+    setVotedCategoryIds([]);
+    setVotedNominationIds([]);
+    setBallotVotes([]);
+    setJustVotedInfo(null);
+    setIsLoggingOut(false);
     router.replace('/');
   };
 
@@ -206,6 +217,18 @@ function VotePageContent() {
 
     if (!isVerified) {
       setShowPhoneModal(true);
+      return;
+    }
+
+    // Check if voter already voted for this artist
+    if (votedNominationIds.includes(selectedNominationId)) {
+      setError('You have already voted for this artist. Duplicate votes for the same artist are not permitted.');
+      return;
+    }
+
+    // Check if category vote is already used
+    if (votedCategoryIds.includes(activeCategory.id)) {
+      setError('You have already cast your vote in this award category. Each voter may cast 1 vote per category.');
       return;
     }
 
@@ -228,12 +251,23 @@ function VotePageContent() {
         throw new Error(data.error || 'Failed to record vote for this category.');
       }
 
+      const selectedNom = activeNominations.find((n) => n.id === selectedNominationId);
       const newVotedCount = votedCategoryIds.length + 1;
-      setVotedCategoryIds((prev) => [...prev, activeCategory.id]);
-      setSelectedNominationId('');
 
+      // Update state locally
+      setVotedCategoryIds((prev) => [...prev, activeCategory.id]);
+      setVotedNominationIds((prev) => [...prev, selectedNominationId]);
+
+      // Trigger Joyful Confirmation Popup
+      setJustVotedInfo({
+        artistName: selectedNom?.artist?.stage_name || selectedNom?.artist?.full_name || selectedNom?.title || 'Artist',
+        categoryName: activeCategory.name,
+        totalVoted: newVotedCount,
+      });
+
+      setSelectedNominationId('');
       setVoteSuccessNotice(
-        `Vote ${newVotedCount} of 8 recorded for ${activeCategory.name}!`
+        `Vote successfully recorded for ${selectedNom?.artist?.stage_name || 'artist'} in ${activeCategory.name}!`
       );
 
       // Re-fetch ballot data to sync
@@ -245,13 +279,23 @@ function VotePageContent() {
     }
   };
 
+  // Move to next unvoted category after success modal
+  const handleProceedToNextCategory = () => {
+    setJustVotedInfo(null);
+    const unvoted = categories.filter((c) => !votedCategoryIds.includes(c.id));
+    if (unvoted.length > 0) {
+      setActiveCategoryId(unvoted[0].id);
+      setSelectedNominationId('');
+    }
+  };
+
   // Loading Screen
   if (loading && categories.length === 0) {
     return (
       <div className="min-h-[70vh] flex flex-col items-center justify-center p-4">
         <Loader2 className="w-10 h-10 animate-spin text-[#0f2d59] mb-4" />
         <h3 className="text-base font-bold text-slate-800">
-          Loading Official 8-Category Voting Ballot...
+          Loading Official Voting Ballot...
         </h3>
         <p className="text-xs text-slate-500 mt-1">
           Synchronizing verified cryptographic voting ledger
@@ -261,7 +305,7 @@ function VotePageContent() {
   }
 
   // ─────────────────────────────────────────────────────────────────
-  // VIEW A: OFFICIAL BALLOT RECEIPT & THANK YOU NOTE (COMPLETED 8/8)
+  // VIEW A: ALL 8 CATEGORIES COMPLETED - OFFICIAL RECEIPT
   // ─────────────────────────────────────────────────────────────────
   if (allBallotCompleted) {
     return (
@@ -278,7 +322,7 @@ function VotePageContent() {
             </div>
 
             <span className="text-xs font-black uppercase tracking-widest text-emerald-700 block">
-              Official Voting Certificate &amp; Thank You Note
+              Official Voting Certificate &amp; Receipt
             </span>
 
             <h1 className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight">
@@ -338,31 +382,15 @@ function VotePageContent() {
             </div>
           </div>
 
-          {/* Automatic Logout Notice & Countdown Strip */}
-          <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 text-center space-y-2">
-            <div className="flex items-center justify-center gap-2 text-xs font-extrabold text-amber-950">
-              <Clock className="w-4 h-4 text-amber-600 animate-pulse" />
-              <span>
-                Automatic Logout in <strong>{autoLogoutSeconds} seconds</strong> for privacy &amp; security
-              </span>
-            </div>
-            <div className="w-full h-2 rounded-full bg-amber-200 overflow-hidden max-w-sm mx-auto">
-              <div
-                className="h-full bg-amber-500 transition-all duration-1000"
-                style={{ width: `${(autoLogoutSeconds / 15) * 100}%` }}
-              />
-            </div>
-          </div>
-
           {/* Immediate Exit Button */}
           <div className="text-center pt-2">
             <button
               onClick={handleLogout}
               disabled={isLoggingOut}
-              className="w-full py-3.5 px-6 rounded-2xl bg-[#0f2d59] hover:bg-blue-900 text-white font-extrabold text-sm shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              className="w-full py-4 px-6 rounded-2xl bg-[#0f2d59] hover:bg-blue-900 text-white font-extrabold text-sm shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
               <LogOut className="w-4 h-4" />
-              <span>{isLoggingOut ? 'Logging out...' : 'Exit & Logout Ballot Now'}</span>
+              <span>{isLoggingOut ? 'Logging out...' : 'Log Out & Exit Voting Session'}</span>
             </button>
           </div>
         </div>
@@ -371,14 +399,14 @@ function VotePageContent() {
   }
 
   // ─────────────────────────────────────────────────────────────────
-  // VIEW B: STEP-BY-STEP 8-CATEGORY VOTING WIZARD
+  // VIEW B: VOTING DESK (VOTE FOR WHOEVER YOU WANT, EXIT ANYTIME)
   // ─────────────────────────────────────────────────────────────────
   const votedCount = votedCategoryIds.length;
   const progressPercent = Math.round((votedCount / 8) * 100);
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      {/* Phone Verification Modal */}
+      {/* Phone Verification Modal (Triggered on login / before vote) */}
       <PhoneVerificationModal
         isOpen={showPhoneModal}
         onClose={() => setShowPhoneModal(false)}
@@ -386,44 +414,110 @@ function VotePageContent() {
           setShowPhoneModal(false);
           fetchBallot();
         }}
-        title="Verify Mobile Number to Vote"
-        description="To ensure 1 fair ballot per verified citizen across all 8 award categories, please verify your mobile number via OTP."
+        title="Verify Mobile Number via OTP to Vote"
+        description="To ensure 1 fair vote per verified citizen and record your vote permanently, please enter your mobile number to receive a 6-digit OTP."
       />
 
-      {/* Header Banner & Ballot Progress */}
+      {/* POPUP MODAL: VOTE SUCCESS CONFIRMATION */}
+      {justVotedInfo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-fade-in">
+          <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden p-6 sm:p-8 space-y-6 text-center">
+            <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-inner border-2 border-emerald-300">
+              <CheckCircle2 className="w-10 h-10" />
+            </div>
+
+            <div className="space-y-2">
+              <span className="text-[11px] font-black uppercase tracking-widest text-emerald-700 bg-emerald-100 px-3 py-1 rounded-full inline-block">
+                Vote Recorded Successfully!
+              </span>
+              <h3 className="text-xl font-black text-slate-900">
+                {justVotedInfo.artistName}
+              </h3>
+              <p className="text-xs text-slate-600">
+                Category: <strong>{justVotedInfo.categoryName}</strong>
+              </p>
+              <p className="text-xs text-emerald-800 font-semibold bg-emerald-50 p-3 rounded-2xl border border-emerald-200">
+                Aapka vote database ledger me permanently record ho chuka hai. Same artist ko dobara vote nahi diya ja sakta.
+              </p>
+            </div>
+
+            <div className="text-xs text-slate-500 font-medium">
+              Ballot Progress: <strong>{justVotedInfo.totalVoted} of 8 Categories Voted</strong>
+            </div>
+
+            <div className="space-y-3 pt-2">
+              {/* Option 1: Continue voting for other artists */}
+              <button
+                onClick={handleProceedToNextCategory}
+                className="w-full py-3.5 px-5 rounded-2xl bg-[#0f2d59] hover:bg-blue-900 text-white font-extrabold text-xs uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <span>Vote for Another Artist / Category</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+
+              {/* Option 2: Exit and Logout cleanly */}
+              <button
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+                className="w-full py-3 px-5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                <LogOut className="w-4 h-4 text-slate-600" />
+                <span>{isLoggingOut ? 'Logging out...' : 'Log Out & Exit Now'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Header Banner & Voter Session Control */}
       <div className="bg-[#0f2d59] text-white rounded-3xl p-6 sm:p-8 space-y-5 shadow-xl relative overflow-hidden tribal-pattern-bg">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-400/20 text-amber-300 text-xs font-bold uppercase tracking-wider border border-amber-400/30">
               <Vote className="w-3.5 h-3.5" />
-              <span>Mandatory 8-Category Official Ballot</span>
+              <span>Citizen Voting Desk</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-white">
               National Adivasi Cultural Arts Voting
             </h1>
             <p className="text-xs sm:text-sm text-blue-200">
-              Cast strictly 1 vote in EACH of the 8 award categories below to finalize your ballot.
+              Aap jis artist ko chahein vote de sakte hain, chahe 1 category me ya sabhi categories me. Vote dekar aap kabhi bhi Log Out karke exit kar sakte hain.
             </p>
           </div>
 
-          {/* Verified voter indicator */}
-          <div className="p-3 rounded-2xl bg-white/10 border border-white/20 text-right shrink-0">
-            <span className="text-[10px] uppercase font-bold text-amber-300 block">Voter Status</span>
-            <span className="text-xs font-bold text-white flex items-center justify-end gap-1.5 mt-0.5">
-              {isVerified ? (
-                <>
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                  +91 {voterPhone || 'Verified'}
-                </>
-              ) : (
-                <button
-                  onClick={() => setShowPhoneModal(true)}
-                  className="text-amber-300 underline font-extrabold"
-                >
-                  Verify via Mobile OTP
-                </button>
-              )}
-            </span>
+          {/* Voter Status & Direct Log Out Button */}
+          <div className="p-3.5 rounded-2xl bg-white/10 border border-white/20 text-right shrink-0 space-y-2">
+            <div>
+              <span className="text-[10px] uppercase font-bold text-amber-300 block">Voter Status</span>
+              <span className="text-xs font-bold text-white flex items-center justify-end gap-1.5 mt-0.5">
+                {isVerified ? (
+                  <>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    +91 {voterPhone || 'Verified'}
+                  </>
+                ) : (
+                  <button
+                    onClick={() => setShowPhoneModal(true)}
+                    className="text-amber-300 underline font-extrabold flex items-center gap-1"
+                  >
+                    <Smartphone className="w-3 h-3" />
+                    <span>Login via Mobile OTP</span>
+                  </button>
+                )}
+              </span>
+            </div>
+
+            {/* Logout Button in Header Bar */}
+            {isVerified && (
+              <button
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+                className="w-full py-1.5 px-3 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-200 border border-red-400/30 text-[11px] font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <LogOut className="w-3 h-3 text-red-300" />
+                <span>{isLoggingOut ? 'Logging out...' : 'Log Out & Exit'}</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -444,11 +538,11 @@ function VotePageContent() {
         </div>
       </div>
 
-      {/* 8-Category Step Selector Strip */}
+      {/* 8-Category Selector Strip */}
       <div className="space-y-2">
         <div className="flex items-center justify-between text-xs font-extrabold text-slate-700">
-          <span>Choose or Proceed through Categories (Mandatory: 8 of 8):</span>
-          <span className="text-slate-500">Pick any category first, then follow sequence</span>
+          <span>Award Categories (Click any category to view and vote for artists):</span>
+          <span className="text-slate-500">Pick any category in any order</span>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
@@ -503,9 +597,17 @@ function VotePageContent() {
 
       {/* Notifications */}
       {voteSuccessNotice && (
-        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-300 text-xs sm:text-sm text-emerald-900 font-bold flex items-center gap-2 shadow-xs animate-fade-in">
-          <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-          <span>{voteSuccessNotice}</span>
+        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-300 text-xs sm:text-sm text-emerald-900 font-bold flex items-center justify-between gap-3 shadow-xs animate-fade-in">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+            <span>{voteSuccessNotice}</span>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="text-xs font-black text-emerald-950 bg-emerald-200 hover:bg-emerald-300 px-3 py-1.5 rounded-xl transition-colors cursor-pointer shrink-0"
+          >
+            Log Out Now
+          </button>
         </div>
       )}
 
@@ -522,7 +624,7 @@ function VotePageContent() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
             <div>
               <span className="text-xs uppercase font-extrabold tracking-widest text-amber-600">
-                Category Selection ({votedCategoryIds.indexOf(activeCategory.id) !== -1 ? 'Already Voted' : 'Action Required'})
+                {isCurrentCategoryVoted ? 'Category Vote Recorded' : 'Category Open for Voting'}
               </span>
               <h2 className="text-xl sm:text-2xl font-black text-slate-900 mt-0.5">
                 {activeCategory.name}
@@ -537,7 +639,7 @@ function VotePageContent() {
             ) : (
               <span className="px-3.5 py-1.5 rounded-full bg-amber-100 text-amber-900 font-extrabold text-xs flex items-center gap-1.5 self-start sm:self-auto">
                 <Clock className="w-4 h-4 text-amber-700" />
-                <span>Select 1 Artist to Vote</span>
+                <span>Select Any Artist to Vote</span>
               </span>
             )}
           </div>
@@ -557,24 +659,42 @@ function VotePageContent() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {activeNominations.map((nom) => {
                 const isSelected = selectedNominationId === nom.id;
+                const isAlreadyVotedNom = votedNominationIds.includes(nom.id);
+                const isCategoryAlreadyVoted = isCurrentCategoryVoted;
                 const videoUrl = nom.upload_record?.public_url;
 
                 return (
                   <div
                     key={nom.id}
                     onClick={() => {
-                      if (!isCurrentCategoryVoted) {
+                      if (!isVerified) {
+                        setShowPhoneModal(true);
+                        return;
+                      }
+                      if (!isCategoryAlreadyVoted && !isAlreadyVotedNom) {
                         setSelectedNominationId(nom.id);
                         setError(null);
                       }
                     }}
-                    className={`rounded-2xl border overflow-hidden transition-all flex flex-col justify-between cursor-pointer ${
-                      isSelected
-                        ? 'border-[#0f2d59] ring-4 ring-blue-500/20 shadow-lg bg-blue-50/40'
-                        : 'border-slate-200 hover:border-slate-300 bg-white shadow-xs'
+                    className={`rounded-2xl border overflow-hidden transition-all flex flex-col justify-between ${
+                      isAlreadyVotedNom
+                        ? 'border-emerald-500 ring-2 ring-emerald-400 bg-emerald-50/30 shadow-md'
+                        : isSelected
+                        ? 'border-[#0f2d59] ring-4 ring-blue-500/20 shadow-lg bg-blue-50/40 cursor-pointer'
+                        : isCategoryAlreadyVoted
+                        ? 'border-slate-200 bg-slate-50 opacity-75'
+                        : 'border-slate-200 hover:border-slate-300 bg-white shadow-xs cursor-pointer'
                     }`}
                   >
                     <div>
+                      {/* Voted Badge Header if already voted for this artist */}
+                      {isAlreadyVotedNom && (
+                        <div className="bg-emerald-600 text-white text-[11px] font-black uppercase tracking-wider py-1.5 px-3 flex items-center justify-center gap-1.5">
+                          <Check className="w-3.5 h-3.5" />
+                          <span>You Voted for this Artist (Vote Locked)</span>
+                        </div>
+                      )}
+
                       {/* Video Player */}
                       <div className="aspect-video bg-black relative">
                         {videoUrl ? (
@@ -611,7 +731,7 @@ function VotePageContent() {
                           </div>
                           <div className="min-w-0">
                             <span className="text-xs font-bold text-slate-800 block truncate">
-                              {nom.artist?.stage_name}
+                              {nom.artist?.stage_name || nom.artist?.full_name}
                             </span>
                             <span className="text-[11px] text-slate-500 flex items-center gap-1 truncate">
                               <MapPin className="w-3 h-3 shrink-0" />
@@ -622,12 +742,37 @@ function VotePageContent() {
                       </div>
                     </div>
 
-                    {/* Radio Select Button */}
-                    {!isCurrentCategoryVoted && (
-                      <div className="p-3 border-t border-slate-100 bg-slate-50/60">
+                    {/* Button Action Bar */}
+                    <div className="p-3 border-t border-slate-100 bg-slate-50/60">
+                      {isAlreadyVotedNom ? (
+                        <button
+                          disabled
+                          className="w-full py-2 px-3 rounded-xl text-xs font-extrabold bg-emerald-100 text-emerald-900 border border-emerald-300 flex items-center justify-center gap-1.5 cursor-not-allowed opacity-90"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+                          <span>Already Voted for this Artist</span>
+                        </button>
+                      ) : isCategoryAlreadyVoted ? (
+                        <button
+                          disabled
+                          className="w-full py-2 px-3 rounded-xl text-xs font-bold bg-slate-100 text-slate-500 border border-slate-200 flex items-center justify-center gap-1.5 cursor-not-allowed"
+                        >
+                          <Lock className="w-3.5 h-3.5 text-slate-400" />
+                          <span>Category Vote Used (1 per category)</span>
+                        </button>
+                      ) : (
                         <button
                           type="button"
-                          className={`w-full py-2 px-3 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 ${
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!isVerified) {
+                              setShowPhoneModal(true);
+                              return;
+                            }
+                            setSelectedNominationId(nom.id);
+                            setError(null);
+                          }}
+                          className={`w-full py-2 px-3 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                             isSelected
                               ? 'bg-[#0f2d59] text-white shadow-xs'
                               : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'
@@ -638,10 +783,10 @@ function VotePageContent() {
                               isSelected ? 'fill-amber-400 text-amber-400' : 'text-slate-400'
                             }`}
                           />
-                          <span>{isSelected ? 'Selected for Vote' : 'Select Nominee'}</span>
+                          <span>{isSelected ? 'Selected for Vote' : 'Vote for this Artist'}</span>
                         </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -657,30 +802,53 @@ function VotePageContent() {
                     Ready to cast your 1 official vote in <strong>{activeCategory.name}</strong>.
                   </span>
                 ) : (
-                  <span>Please click on an artist card above to select your vote.</span>
+                  <span>Click on an artist card above to choose whom you want to vote for.</span>
                 )}
               </div>
 
-              <button
-                onClick={handleCastCategoryVote}
-                disabled={!selectedNominationId || isSubmittingVote}
-                className="py-3 px-6 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shrink-0"
-              >
-                {isSubmittingVote ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Sealing Vote in Ledger...</span>
-                  </>
-                ) : (
-                  <>
-                    <Vote className="w-4 h-4" />
-                    <span>Confirm Vote ({votedCount + 1} of 8)</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleCastCategoryVote}
+                  disabled={!selectedNominationId || isSubmittingVote}
+                  className="py-3 px-6 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shrink-0"
+                >
+                  {isSubmittingVote ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Recording Vote in Ledger...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Vote className="w-4 h-4" />
+                      <span>Confirm Vote ({votedCount + 1} of 8)</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Persistent Voter Exit & Logout Strip */}
+      {isVerified && (
+        <div className="p-4 rounded-2xl bg-slate-100 border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-700">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-emerald-600" />
+            <span>
+              Verified Voter: <strong>+91 {voterPhone}</strong> • You have cast <strong>{votedCount} of 8</strong> votes.
+            </span>
+          </div>
+
+          <button
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            className="py-2 px-4 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-extrabold text-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+          >
+            <LogOut className="w-3.5 h-3.5 text-amber-400" />
+            <span>{isLoggingOut ? 'Logging out...' : 'Log Out & Exit Session'}</span>
+          </button>
         </div>
       )}
     </div>

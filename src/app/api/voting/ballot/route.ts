@@ -77,6 +77,7 @@ export async function GET(request: NextRequest) {
           votedCount: 0,
           totalCategories: 8,
           votedCategoryIds: [],
+          votedNominationIds: [],
           allCompleted: false,
           categories,
           nominationsByCategory: categoryNominations,
@@ -103,6 +104,7 @@ export async function GET(request: NextRequest) {
           votedCount: 0,
           totalCategories: 8,
           votedCategoryIds: [],
+          votedNominationIds: [],
           allCompleted: false,
           categories,
           nominationsByCategory: categoryNominations,
@@ -129,6 +131,10 @@ export async function GET(request: NextRequest) {
       .map((v) => v.category_id)
       .filter(Boolean);
 
+    const votedNominationIds = (voterVotes || [])
+      .map((v) => v.nomination_id)
+      .filter(Boolean);
+
     const votedCount = votedCategoryIds.length;
     const allCompleted = votedCount >= 8;
 
@@ -143,6 +149,7 @@ export async function GET(request: NextRequest) {
         votedCount,
         totalCategories: 8,
         votedCategoryIds,
+        votedNominationIds,
         allCompleted,
         categories,
         nominationsByCategory: categoryNominations,
