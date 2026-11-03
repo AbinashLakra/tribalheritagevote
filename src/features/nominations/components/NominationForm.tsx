@@ -41,10 +41,10 @@ interface NominationFormProps {
   onComplete?: () => void;
 }
 
-// R2 Multipart Part Size: 6 MB per compliant S3 part (meets S3/R2 >= 5 MB requirement)
-const R2_PART_SIZE = 6 * 1024 * 1024;
-// Vercel Safe Sub-Chunk Slice Size: 3 MB (safely under Vercel Serverless 4.5 MB request limit)
-const SLICE_SIZE = 3 * 1024 * 1024;
+// R2 Multipart Part Size: 5.5 MB per compliant S3 part (meets S3/R2 >= 5 MB requirement)
+const R2_PART_SIZE = 5.5 * 1024 * 1024;
+// Vercel Safe Sub-Chunk Slice Size: 2.8 MB (safely under Vercel Serverless 4.5 MB request limit)
+const SLICE_SIZE = 2.8 * 1024 * 1024;
 
 /**
  * Uploads a single multipart sub-chunk slice via XMLHttpRequest with live progress reporting.
@@ -52,7 +52,7 @@ const SLICE_SIZE = 3 * 1024 * 1024;
 function uploadChunkViaXHR(
   formData: FormData,
   onProgress: (loaded: number, total: number) => void
-): Promise<{ success: boolean; partNumber: number; etag?: string; pending?: boolean }> {
+): Promise<{ success: boolean; partNumber: number; etag?: string; pending?: boolean; needsSlice0Restart?: boolean }> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/api/uploads/multipart/part');
@@ -78,7 +78,11 @@ function uploadChunkViaXHR(
       } else {
         try {
           const res = JSON.parse(xhr.responseText);
-          reject(new Error(res.error || `Server returned error ${xhr.status}`));
+          const err: any = new Error(res.error || `Server returned error ${xhr.status}`);
+          if (res.needsSlice0Restart) {
+            err.needsSlice0Restart = true;
+          }
+          reject(err);
         } catch {
           reject(new Error(`Server returned error ${xhr.status}`));
         }
@@ -93,8 +97,8 @@ function uploadChunkViaXHR(
       reject(new Error('Upload slice timed out. Please check your internet connection.'));
     };
 
-    // 120 seconds timeout per 3MB slice
-    xhr.timeout = 120000;
+    // 90 seconds timeout per 2.8MB slice
+    xhr.timeout = 90000;
     xhr.send(formData);
   });
 }
@@ -323,6 +327,10 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
       if (!durationHandled) {
         durationHandled = true;
         setIsCheckingDuration(false);
+        try {
+          tempVideo.src = '';
+          tempVideo.load();
+        } catch {}
         // Fallback for devices where metadata loading times out
         setFile(selectedFile);
       }
@@ -334,6 +342,12 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
       clearTimeout(safetyTimeout);
       setIsCheckingDuration(false);
       const rawDur = tempVideo.duration;
+
+      // Release video handle immediately so Safari WebKit doesn't hold an exclusive lock
+      try {
+        tempVideo.src = '';
+        tempVideo.load();
+      } catch {}
 
       if (!rawDur || !isFinite(rawDur) || isNaN(rawDur)) {
         // Fallback if browser cannot parse length
@@ -370,6 +384,10 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
       durationHandled = true;
       clearTimeout(safetyTimeout);
       setIsCheckingDuration(false);
+      try {
+        tempVideo.src = '';
+        tempVideo.load();
+      } catch {}
       // Fallback if browser failed metadata loading
       setFile(selectedFile);
     };
@@ -536,7 +554,7 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
       let finalPublicUrl = previewUrl || '';
 
       // STEP 2: RESILIENT SLICE-BASED CLOUDFLARE R2 UPLOAD
-      // Bypasses Vercel's 4.5 MB request limit by sending 3 MB slices,
+      // Bypasses Vercel's 4.5 MB request limit by sending 2.8 MB slices,
       // assembling them into compliant >= 5 MB parts on Cloudflare R2 on the fly.
       const totalBytes = file.size;
       const totalMb = (totalBytes / (1024 * 1024)).toFixed(1);
@@ -551,14 +569,19 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
         const partSize = partEnd - partStart;
         const isLastPart = partNumber === totalParts;
 
-        // Split this 6 MB part into 3 MB slices (< 4.5 MB Vercel limit)
-        const totalSlices = Math.max(1, Math.ceil(partSize / SLICE_SIZE));
+        // If part is under 4 MB (e.g. last part or small video), send in 1 slice directly
+        const totalSlices = partSize <= 4 * 1024 * 1024 ? 1 : Math.max(1, Math.ceil(partSize / SLICE_SIZE));
 
-        for (let sliceIndex = 0; sliceIndex < totalSlices; sliceIndex++) {
+        let sliceIndex = 0;
+        while (sliceIndex < totalSlices) {
           const sliceStart = partStart + sliceIndex * SLICE_SIZE;
           const sliceEnd = Math.min(partEnd, sliceStart + SLICE_SIZE);
           const sliceBlob = file.slice(sliceStart, sliceEnd);
           const isLastSlice = sliceIndex === totalSlices - 1;
+
+          // Safari WebKit Fix: Read slice into ArrayBuffer to avoid file lock stalls
+          const sliceBuffer = await sliceBlob.arrayBuffer();
+          const cleanChunk = new Blob([sliceBuffer], { type: 'application/octet-stream' });
 
           let sliceSuccess = false;
           let lastSliceErr: any = null;
@@ -573,7 +596,7 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
               chunkFormData.append('sliceIndex', String(sliceIndex));
               chunkFormData.append('isLastSlice', isLastSlice ? 'true' : 'false');
               chunkFormData.append('isLastPart', isLastPart ? 'true' : 'false');
-              chunkFormData.append('chunk', sliceBlob, `p${partNumber}-s${sliceIndex}.bin`);
+              chunkFormData.append('chunk', cleanChunk, `p${partNumber}-s${sliceIndex}.bin`);
 
               const sliceRes = await uploadChunkViaXHR(chunkFormData, (loaded) => {
                 const currentUploaded = totalBytesUploaded + loaded;
@@ -583,9 +606,15 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
                 );
                 const loadedMb = (currentUploaded / (1024 * 1024)).toFixed(1);
                 setUploadProgress(percent);
-                setUploadStatusText(
-                  `Uploading to Cloudflare R2: ${percent}% (${loadedMb} MB / ${totalMb} MB) — Part ${partNumber} of ${totalParts}`
-                );
+                if (loaded >= cleanChunk.size && isLastSlice && totalSlices > 1) {
+                  setUploadStatusText(
+                    `Assembling Part ${partNumber}/${totalParts} on Cloudflare R2... (${percent}%)`
+                  );
+                } else {
+                  setUploadStatusText(
+                    `Uploading to Cloudflare R2: ${percent}% (${loadedMb} MB / ${totalMb} MB) — Part ${partNumber} of ${totalParts}`
+                  );
+                }
               });
 
               if (sliceRes.etag) {
@@ -595,11 +624,16 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
                 });
               }
 
-              totalBytesUploaded += sliceBlob.size;
+              totalBytesUploaded += cleanChunk.size;
               sliceSuccess = true;
               break;
             } catch (err: any) {
               lastSliceErr = err;
+              if (err?.needsSlice0Restart) {
+                // If slice 0 missing, rewind to slice 0 and re-upload slice 0
+                sliceIndex = 0;
+                break;
+              }
               if (attempt < 3) {
                 setUploadStatusText(
                   `Part ${partNumber}/${totalParts} connection retry (${attempt}/3)... Please hold.`
@@ -609,6 +643,10 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
             }
           }
 
+          if (lastSliceErr?.needsSlice0Restart) {
+            continue; // Rewound to slice 0
+          }
+
           if (!sliceSuccess) {
             throw new Error(
               `Failed to upload video part ${partNumber} (slice ${sliceIndex + 1}/${totalSlices}): ${
@@ -616,6 +654,8 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
               }`
             );
           }
+
+          sliceIndex++;
         }
       }
 

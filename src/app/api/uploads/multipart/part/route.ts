@@ -3,7 +3,7 @@ import { UploadPartCommand, PutObjectCommand, GetObjectCommand, DeleteObjectComm
 import { getR2Client } from '@/lib/r2/client';
 import { R2_BUCKET_NAME } from '@/config/r2';
 
-export const maxDuration = 120;
+export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
 /**
@@ -91,20 +91,29 @@ export async function POST(req: NextRequest) {
         Key: tempSliceKey,
       }));
 
-      const chunks: Buffer[] = [];
-      for await (const data of getSlice0.Body as any) {
-        chunks.push(data);
+      let slice0Buf: Buffer;
+      if (typeof (getSlice0.Body as any)?.transformToByteArray === 'function') {
+        const bytes = await (getSlice0.Body as any).transformToByteArray();
+        slice0Buf = Buffer.from(bytes);
+      } else {
+        const chunks: Buffer[] = [];
+        for await (const data of getSlice0.Body as any) {
+          chunks.push(Buffer.isBuffer(data) ? data : Buffer.from(data));
+        }
+        slice0Buf = Buffer.concat(chunks);
       }
-      const slice0Buf = Buffer.concat(chunks);
-      combinedBuffer = Buffer.concat([slice0Buf, currentBuffer]);
 
-      // Clean up temporary slice
-      s3.send(new DeleteObjectCommand({
-        Bucket: R2_BUCKET_NAME,
-        Key: tempSliceKey,
-      })).catch(() => {});
+      combinedBuffer = Buffer.concat([slice0Buf, currentBuffer]);
     } catch (err: any) {
-      console.warn('Could not retrieve slice 0, uploading current buffer:', err?.message);
+      console.warn(`Slice 0 not found on storage (${tempSliceKey}):`, err?.message);
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Temporary slice 0 missing or expired: ${err?.message || 'NotFound'}.`,
+          needsSlice0Restart: true,
+        },
+        { status: 400 }
+      );
     }
 
     const uploadPartCommand = new UploadPartCommand({
@@ -123,6 +132,12 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       );
     }
+
+    // Clean up temporary slice ONLY after UploadPart succeeds
+    s3.send(new DeleteObjectCommand({
+      Bucket: R2_BUCKET_NAME,
+      Key: tempSliceKey,
+    })).catch(() => {});
 
     return NextResponse.json({
       success: true,
