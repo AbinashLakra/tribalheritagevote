@@ -33,8 +33,8 @@ export async function generatePresignedUploadUrl({
   mediaType,
 }: PresignedUploadOptions): Promise<PresignedUploadResult> {
   // 1. Validate MIME type
-  if (mediaType === 'video' && !isAllowedVideoType(contentType)) {
-    throw new Error(`Invalid video MIME type: ${contentType}`);
+  if (mediaType === 'video' && !isAllowedVideoType(contentType, objectKey)) {
+    throw new Error(`Invalid video MIME type or format: ${contentType}`);
   }
   if (mediaType === 'image' && !isAllowedImageType(contentType)) {
     throw new Error(`Invalid image MIME type: ${contentType}`);

@@ -6,8 +6,8 @@
 // Size limits
 // ---------------------------------------------------------------------------
 
-/** Maximum video file size in bytes (100 MB). */
-export const MAX_VIDEO_SIZE_BYTES: number = 100 * 1024 * 1024;
+/** Maximum video file size in bytes (250 MB for high-res iPhone/Android 4K and 1080p uploads). */
+export const MAX_VIDEO_SIZE_BYTES: number = 250 * 1024 * 1024;
 
 /** Minimum video duration in seconds (30 seconds). */
 export const MIN_VIDEO_DURATION_SECONDS: number = 30;
@@ -22,11 +22,18 @@ export const MAX_IMAGE_SIZE_BYTES: number = 5 * 1024 * 1024;
 // Allowed MIME types & extensions
 // ---------------------------------------------------------------------------
 
-/** MIME types accepted for video uploads. */
+/** MIME types accepted for video uploads across iOS (iPhone), Android, and Windows. */
 export const ALLOWED_VIDEO_MIME_TYPES: readonly string[] = [
   'video/mp4',
   'video/webm',
   'video/quicktime',
+  'video/x-m4v',
+  'video/3gpp',
+  'video/3gpp2',
+  'video/ogg',
+  'video/x-matroska',
+  'video/avi',
+  'video/msvideo',
 ] as const;
 
 /** MIME types accepted for image uploads. */
@@ -41,6 +48,10 @@ export const ALLOWED_VIDEO_EXTENSIONS: readonly string[] = [
   '.mp4',
   '.webm',
   '.mov',
+  '.m4v',
+  '.3gp',
+  '.mkv',
+  '.avi',
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -66,13 +77,25 @@ export const R2_MEDIA_DOMAIN: string =
 // ---------------------------------------------------------------------------
 
 /**
- * Checks whether the given MIME type is an allowed video type.
+ * Checks whether the given MIME type or filename is an allowed video type.
+ * Supports iOS Safari, Android Chrome, and Desktop file types.
  *
  * @param mimeType - The MIME type string to validate
- * @returns `true` if the MIME type is in the allowed video list
+ * @param filename - Optional original filename to validate by extension
+ * @returns `true` if the MIME type or extension is in the allowed video list
  */
-export function isAllowedVideoType(mimeType: string): boolean {
-  return (ALLOWED_VIDEO_MIME_TYPES as readonly string[]).includes(mimeType);
+export function isAllowedVideoType(mimeType: string, filename?: string): boolean {
+  const cleanMime = (mimeType || '').trim().toLowerCase();
+  if (cleanMime && (ALLOWED_VIDEO_MIME_TYPES as readonly string[]).includes(cleanMime)) {
+    return true;
+  }
+  if (filename) {
+    const ext = '.' + filename.split('.').pop()?.toLowerCase();
+    if ((ALLOWED_VIDEO_EXTENSIONS as readonly string[]).includes(ext)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**

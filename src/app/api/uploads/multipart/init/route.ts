@@ -32,15 +32,15 @@ export async function POST(req: NextRequest) {
       password,
     } = body;
 
-    // 1. Basic Validations
-    if (!filename || !fileSizeBytes || !mimeType) {
+    // 1. Basic Validations (Cross-platform iOS Safari, Android, and Desktop compatibility)
+    if (!filename || !fileSizeBytes) {
       return NextResponse.json(
-        { success: false, error: 'File metadata (filename, size, MIME type) is required.' },
+        { success: false, error: 'File metadata (filename, size) is required.' },
         { status: 400 }
       );
     }
 
-    if (!isAllowedVideoType(mimeType)) {
+    if (!isAllowedVideoType(mimeType || '', filename)) {
       return NextResponse.json(
         { success: false, error: 'Invalid video format. Supported formats are MP4, WebM, and MOV.' },
         { status: 400 }
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
 
     if (!isFileSizeValid(fileSizeBytes, 'video')) {
       return NextResponse.json(
-        { success: false, error: 'Video size exceeds the maximum allowed limit of 100 MB.' },
+        { success: false, error: 'Video size exceeds the maximum allowed limit of 250 MB.' },
         { status: 400 }
       );
     }

@@ -59,13 +59,14 @@ export default function ArtistLayout({ children }: { children: React.ReactNode }
             </nav>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <Link
               href="/"
-              className="text-xs font-bold text-slate-700 hover:text-[#0f2d59] flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-300 hover:bg-slate-50 transition-colors shadow-xs"
+              className="text-[11px] sm:text-xs font-bold text-slate-700 hover:text-[#0f2d59] flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl border border-slate-300 hover:bg-slate-50 transition-colors shadow-xs"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Back to Public Website</span>
+              <span className="hidden sm:inline">Back to Public Website</span>
+              <span className="sm:hidden">Website</span>
             </Link>
           </div>
         </div>

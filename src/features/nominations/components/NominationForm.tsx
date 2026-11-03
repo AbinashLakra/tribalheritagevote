@@ -99,7 +99,7 @@ function uploadChunkViaXHR(
 
 // Video & Performance Submission Constraints (Strict Contest Rules)
 const MIN_VIDEO_BYTES = 50 * 1024; // 50 KB
-const MAX_VIDEO_BYTES = 100 * 1024 * 1024; // 100 MB
+const MAX_VIDEO_BYTES = 250 * 1024 * 1024; // 250 MB (Supports high-res iPhone 4K/1080p, Android, and Desktop recordings)
 const MIN_DURATION_SEC = 30; // Minimum 30 seconds
 const MAX_DURATION_SEC = 60; // Maximum 60 seconds (1 minute)
 const MIN_WORDS = 5; // Minimum 5 words for description
@@ -283,8 +283,8 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
     setSelectedFileName(selectedFile.name);
     setSelectedFileSize(selectedFile.size);
 
-    // 1. MIME check
-    if (!isAllowedVideoType(selectedFile.type)) {
+    // 1. MIME & File Extension check (Universal iOS Safari, Android, and Windows support)
+    if (!isAllowedVideoType(selectedFile.type, selectedFile.name)) {
       const msg = 'Invalid video format. Supported formats are MP4, WebM, and MOV.';
       setError(msg);
       setDurationError(msg);
@@ -293,11 +293,11 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
       return;
     }
 
-    // 2. Size check (Up to 100 MB)
+    // 2. Size check (Up to 250 MB)
     const sizeBytes = selectedFile.size;
     const sizeMB = sizeBytes / (1024 * 1024);
     if (sizeBytes < MIN_VIDEO_BYTES || sizeBytes > MAX_VIDEO_BYTES) {
-      const msg = `Video size must be under 100 MB. Your selected file is ${sizeMB.toFixed(2)} MB.`;
+      const msg = `Video size must be under 250 MB. Your selected file is ${sizeMB.toFixed(2)} MB.`;
       setError(msg);
       setDurationError(msg);
       setFile(null);
@@ -305,14 +305,31 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
       return;
     }
 
-    // 3. Instant Video Duration check via HTML5 Video metadata
+    // 3. Instant Video Duration check via HTML5 Video metadata (iOS Safari & Android optimized)
     setIsCheckingDuration(true);
     const objectUrl = URL.createObjectURL(selectedFile);
     const tempVideo = document.createElement('video');
     tempVideo.preload = 'metadata';
+    tempVideo.setAttribute('playsinline', 'true');
+    tempVideo.playsInline = true;
+    tempVideo.muted = true;
+    tempVideo.defaultMuted = true;
     tempVideo.src = objectUrl;
 
+    let durationHandled = false;
+    const safetyTimeout = setTimeout(() => {
+      if (!durationHandled) {
+        durationHandled = true;
+        setIsCheckingDuration(false);
+        // Fallback for devices where metadata loading times out
+        setFile(selectedFile);
+      }
+    }, 6000);
+
     tempVideo.onloadedmetadata = () => {
+      if (durationHandled) return;
+      durationHandled = true;
+      clearTimeout(safetyTimeout);
       setIsCheckingDuration(false);
       const rawDur = tempVideo.duration;
 
@@ -347,6 +364,9 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
     };
 
     tempVideo.onerror = () => {
+      if (durationHandled) return;
+      durationHandled = true;
+      clearTimeout(safetyTimeout);
       setIsCheckingDuration(false);
       // Fallback if browser failed metadata loading
       setFile(selectedFile);
@@ -1103,10 +1123,10 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
           </div>
           <div>
             <h3 className="text-base sm:text-lg font-extrabold text-slate-900">
-              3. Performance Video Upload (MP4, WebM, MOV • 30s to 60s • Up to 100 MB)
+              3. Performance Video Upload (iPhone, Android, Windows • 30s to 60s • Up to 250 MB)
             </h3>
             <p className="text-xs text-slate-500">
-              Official Criteria: Duration strictly between 30 seconds and 60 seconds (1 minute), File size up to 100 MB.
+              Official Criteria: Duration strictly between 30 seconds and 60 seconds (1 minute), File size up to 250 MB.
             </p>
           </div>
         </div>
@@ -1116,7 +1136,7 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
           <input
             type="file"
             id="video-upload"
-            accept="video/mp4,video/webm,video/quicktime"
+            accept="video/*,.mp4,.mov,.webm,.m4v"
             onChange={handleFileChange}
             className="hidden"
           />
@@ -1130,7 +1150,7 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
                 Click here to browse your video file
               </p>
               <p className="text-xs text-slate-500">
-                Format: MP4, WebM, MOV • Duration: 30s to 60s (1 Min) • Size: Up to 100 MB
+                Format: MP4, MOV, WebM (iPhone / Android / Windows) • Duration: 30s to 60s • Size: Up to 250 MB
               </p>
             </div>
 

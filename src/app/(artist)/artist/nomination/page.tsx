@@ -3,6 +3,8 @@ import { NominationForm } from '@/features/nominations/components/NominationForm
 import { ART_CATEGORIES } from '@/lib/constants/art-categories';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
 
 export const metadata = {
   title: 'Dharti Abba Veer Birsa Munda — Official Artist Nomination Form',
