@@ -12,25 +12,13 @@ export async function getMediaUrl(
   objectKey: string,
   expiresInSeconds: number = 7200
 ): Promise<string> {
+  const cleanKey = objectKey.replace(/^\/+/, '');
+
   if (R2_MEDIA_DOMAIN) {
     const cleanDomain = R2_MEDIA_DOMAIN.replace(/\/+$/, '');
-    const cleanKey = objectKey.replace(/^\/+/, '');
     return `${cleanDomain}/${cleanKey}`;
   }
 
-  const client = getR2Client();
-  const bucket = R2_BUCKET_NAME;
-
-  if (!bucket) {
-    throw new Error('R2_BUCKET_NAME is not configured');
-  }
-
-  const command = new GetObjectCommand({
-    Bucket: bucket,
-    Key: objectKey,
-  });
-
-  return getSignedUrl(client, command, {
-    expiresIn: expiresInSeconds,
-  });
+  // Return permanent streaming endpoint with range request support for iOS/Android/PC
+  return `/api/media/stream?key=${encodeURIComponent(cleanKey)}`;
 }
