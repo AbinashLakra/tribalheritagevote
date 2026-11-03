@@ -41,16 +41,18 @@ interface NominationFormProps {
   onComplete?: () => void;
 }
 
-// Upload chunk size: 5 MB per part (Standard AWS S3 / Cloudflare R2 minimum part size)
-const UPLOAD_CHUNK_SIZE = 5 * 1024 * 1024;
+// R2 Multipart Part Size: 6 MB per compliant S3 part (meets S3/R2 >= 5 MB requirement)
+const R2_PART_SIZE = 6 * 1024 * 1024;
+// Vercel Safe Sub-Chunk Slice Size: 3 MB (safely under Vercel Serverless 4.5 MB request limit)
+const SLICE_SIZE = 3 * 1024 * 1024;
 
 /**
- * Uploads a single multipart chunk via XMLHttpRequest with live progress reporting.
+ * Uploads a single multipart sub-chunk slice via XMLHttpRequest with live progress reporting.
  */
 function uploadChunkViaXHR(
   formData: FormData,
   onProgress: (loaded: number, total: number) => void
-): Promise<{ success: boolean; partNumber: number; etag: string }> {
+): Promise<{ success: boolean; partNumber: number; etag?: string; pending?: boolean }> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/api/uploads/multipart/part');
@@ -65,7 +67,7 @@ function uploadChunkViaXHR(
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
           const res = JSON.parse(xhr.responseText);
-          if (res.success && res.etag) {
+          if (res.success) {
             resolve(res);
           } else {
             reject(new Error(res.error || 'Server rejected part upload.'));
@@ -84,14 +86,14 @@ function uploadChunkViaXHR(
     };
 
     xhr.onerror = () => {
-      reject(new Error('Network connection error while uploading video chunk.'));
+      reject(new Error('Network connection error while uploading video slice.'));
     };
 
     xhr.ontimeout = () => {
-      reject(new Error('Upload chunk timed out. Please check your internet connection.'));
+      reject(new Error('Upload slice timed out. Please check your internet connection.'));
     };
 
-    // 120 seconds timeout per chunk
+    // 120 seconds timeout per 3MB slice
     xhr.timeout = 120000;
     xhr.send(formData);
   });
@@ -533,69 +535,87 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
       const { uploadId, objectKey, uploadRecordId, artistProfileId } = initData;
       let finalPublicUrl = previewUrl || '';
 
-      // STEP 2: CLOUDFLARE R2 MULTIPART CHUNKED UPLOAD WITH LIVE PROGRESS & AUTO-RETRY
-      const totalParts = Math.max(1, Math.ceil(file.size / UPLOAD_CHUNK_SIZE));
+      // STEP 2: RESILIENT SLICE-BASED CLOUDFLARE R2 UPLOAD
+      // Bypasses Vercel's 4.5 MB request limit by sending 3 MB slices,
+      // assembling them into compliant >= 5 MB parts on Cloudflare R2 on the fly.
       const totalBytes = file.size;
       const totalMb = (totalBytes / (1024 * 1024)).toFixed(1);
 
+      const totalParts = Math.max(1, Math.ceil(totalBytes / R2_PART_SIZE));
       const parts: { partNumber: number; etag: string }[] = [];
-      let totalBytesUploadedBeforeCurrentPart = 0;
+      let totalBytesUploaded = 0;
 
       for (let partNumber = 1; partNumber <= totalParts; partNumber++) {
-        const start = (partNumber - 1) * UPLOAD_CHUNK_SIZE;
-        const end = Math.min(file.size, start + UPLOAD_CHUNK_SIZE);
-        const chunkBlob = file.slice(start, end);
+        const partStart = (partNumber - 1) * R2_PART_SIZE;
+        const partEnd = Math.min(totalBytes, partStart + R2_PART_SIZE);
+        const partSize = partEnd - partStart;
+        const isLastPart = partNumber === totalParts;
 
-        // Upload chunk with auto-retry up to 3 attempts
-        let partSuccess = false;
-        let lastPartErr: any = null;
+        // Split this 6 MB part into 3 MB slices (< 4.5 MB Vercel limit)
+        const totalSlices = Math.max(1, Math.ceil(partSize / SLICE_SIZE));
 
-        for (let attempt = 1; attempt <= 3; attempt++) {
-          try {
-            const chunkFormData = new FormData();
-            chunkFormData.append('uploadId', uploadId);
-            chunkFormData.append('objectKey', objectKey);
-            chunkFormData.append('partNumber', String(partNumber));
-            chunkFormData.append('chunk', chunkBlob, `part-${partNumber}.bin`);
+        for (let sliceIndex = 0; sliceIndex < totalSlices; sliceIndex++) {
+          const sliceStart = partStart + sliceIndex * SLICE_SIZE;
+          const sliceEnd = Math.min(partEnd, sliceStart + SLICE_SIZE);
+          const sliceBlob = file.slice(sliceStart, sliceEnd);
+          const isLastSlice = sliceIndex === totalSlices - 1;
 
-            const partResult = await uploadChunkViaXHR(chunkFormData, (loaded) => {
-              const currentTotalLoaded = totalBytesUploadedBeforeCurrentPart + loaded;
-              const percent = Math.min(
-                90,
-                Math.max(2, Math.round((currentTotalLoaded / totalBytes) * 88))
-              );
-              const loadedMb = (currentTotalLoaded / (1024 * 1024)).toFixed(1);
-              setUploadProgress(percent);
-              setUploadStatusText(
-                `Uploading to Cloudflare R2: ${percent}% (${loadedMb} MB / ${totalMb} MB) — Part ${partNumber} of ${totalParts}`
-              );
-            });
+          let sliceSuccess = false;
+          let lastSliceErr: any = null;
 
-            parts.push({
-              partNumber,
-              etag: partResult.etag,
-            });
+          // Auto-retry up to 3 times per slice on mobile network fluctuations
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+              const chunkFormData = new FormData();
+              chunkFormData.append('uploadId', uploadId);
+              chunkFormData.append('objectKey', objectKey);
+              chunkFormData.append('partNumber', String(partNumber));
+              chunkFormData.append('sliceIndex', String(sliceIndex));
+              chunkFormData.append('isLastSlice', isLastSlice ? 'true' : 'false');
+              chunkFormData.append('isLastPart', isLastPart ? 'true' : 'false');
+              chunkFormData.append('chunk', sliceBlob, `p${partNumber}-s${sliceIndex}.bin`);
 
-            totalBytesUploadedBeforeCurrentPart += chunkBlob.size;
-            partSuccess = true;
-            break;
-          } catch (err: any) {
-            lastPartErr = err;
-            if (attempt < 3) {
-              setUploadStatusText(
-                `Part ${partNumber}/${totalParts} connection retry (${attempt}/3)... Please hold.`
-              );
-              await new Promise((r) => setTimeout(r, 1200 * attempt));
+              const sliceRes = await uploadChunkViaXHR(chunkFormData, (loaded) => {
+                const currentUploaded = totalBytesUploaded + loaded;
+                const percent = Math.min(
+                  90,
+                  Math.max(2, Math.round((currentUploaded / totalBytes) * 88))
+                );
+                const loadedMb = (currentUploaded / (1024 * 1024)).toFixed(1);
+                setUploadProgress(percent);
+                setUploadStatusText(
+                  `Uploading to Cloudflare R2: ${percent}% (${loadedMb} MB / ${totalMb} MB) — Part ${partNumber} of ${totalParts}`
+                );
+              });
+
+              if (sliceRes.etag) {
+                parts.push({
+                  partNumber,
+                  etag: sliceRes.etag,
+                });
+              }
+
+              totalBytesUploaded += sliceBlob.size;
+              sliceSuccess = true;
+              break;
+            } catch (err: any) {
+              lastSliceErr = err;
+              if (attempt < 3) {
+                setUploadStatusText(
+                  `Part ${partNumber}/${totalParts} connection retry (${attempt}/3)... Please hold.`
+                );
+                await new Promise((r) => setTimeout(r, 1000 * attempt));
+              }
             }
           }
-        }
 
-        if (!partSuccess) {
-          throw new Error(
-            `Failed to upload video part ${partNumber} of ${totalParts}: ${
-              lastPartErr?.message || 'Network disconnected'
-            }`
-          );
+          if (!sliceSuccess) {
+            throw new Error(
+              `Failed to upload video part ${partNumber} (slice ${sliceIndex + 1}/${totalSlices}): ${
+                lastSliceErr?.message || 'Network disconnected'
+              }`
+            );
+          }
         }
       }
 
