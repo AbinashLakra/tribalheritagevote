@@ -141,3 +141,4 @@ function handleExternalOrLegacyUrl(url: string, req: NextRequest): NextResponse 
   // Redirect to external URL (e.g. Supabase storage)
   return NextResponse.redirect(url, 307);
 }
+
