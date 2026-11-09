@@ -68,37 +68,66 @@ export async function sendOtpToPhone(rawPhone: string): Promise<SendSmsResult> {
 
   // 3. Dispatch SMS via configured Gateway
 
-  // Gateway A: Fast2SMS Quick SMS Route (India Instant Delivery)
+  // Gateway A: Fast2SMS (India Instant Delivery)
+  // 1st Priority: Dedicated OTP Route (~₹0.20 - ₹0.25 / SMS, requires Fast2SMS website verification)
+  // Fallback: Quick SMS Route ('q' route - ₹7 / SMS) until website verification is active
   const fast2SmsKey =
     process.env.FAST2SMS_API_KEY ||
     'GsZOCXWkv7Rwiwj8Z90M8r7XQ5sFYA6b4DMSV3dgDu26dSozDZwkSkY4SEFQB175Scnex1idSxEAt2Tg';
   if (fast2SmsKey) {
     try {
-      const res = await fetch('https://www.fast2sms.com/dev/bulkV2', {
+      // Step 1: Try economical OTP route (~₹0.20-₹0.25)
+      const otpRes = await fetch('https://www.fast2sms.com/dev/bulkV2', {
         method: 'POST',
         headers: {
           authorization: fast2SmsKey,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          route: 'q',
-          message: `Your Tribal Heritage Vote verification OTP is ${code}. Valid for 5 minutes.`,
-          language: 'english',
-          flash: 0,
+          route: 'otp',
+          variables_values: code,
           numbers: phone,
         }),
       });
-      const data = await res.json();
-      if (data.return) {
+      const otpData = await otpRes.json();
+      if (otpData.return) {
         return {
           success: true,
-          message: `Real SMS OTP dispatched to +91 ${phone} via Fast2SMS.`,
-          gateway: 'fast2sms',
+          message: `Real SMS OTP dispatched to +91 ${phone} via Fast2SMS (OTP Route: ₹0.25).`,
+          gateway: 'fast2sms-otp',
         };
-      } else {
-        console.warn('Fast2SMS response:', data);
-        if (data.status_code === 999) {
-          console.warn('Fast2SMS notice: Complete one-time ₹100 wallet recharge to unlock direct API route.');
+      }
+
+      console.warn('[Fast2SMS] OTP route response:', otpData);
+
+      // Step 2: Fallback to Quick SMS route if OTP route not yet verified on Fast2SMS dashboard
+      if (otpData.status_code === 996 || !otpData.return) {
+        console.warn(
+          '[Fast2SMS] Note: Complete 1-min website verification in Fast2SMS dashboard (under OTP menu) to unlock ₹0.25 rate. Falling back to Quick SMS route.'
+        );
+        const qRes = await fetch('https://www.fast2sms.com/dev/bulkV2', {
+          method: 'POST',
+          headers: {
+            authorization: fast2SmsKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            route: 'q',
+            message: `Your Tribal Heritage Vote verification OTP is ${code}. Valid for 5 minutes.`,
+            language: 'english',
+            flash: 0,
+            numbers: phone,
+          }),
+        });
+        const qData = await qRes.json();
+        if (qData.return) {
+          return {
+            success: true,
+            message: `Real SMS OTP dispatched to +91 ${phone} via Fast2SMS (Quick SMS).`,
+            gateway: 'fast2sms',
+          };
+        } else {
+          console.warn('[Fast2SMS] Quick SMS response:', qData);
         }
       }
     } catch (err: any) {
