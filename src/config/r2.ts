@@ -70,7 +70,7 @@ export const R2_BUCKET_NAME: string = process.env.R2_BUCKET_NAME || '';
 
 /** Public media domain served in front of the R2 bucket. */
 export const R2_MEDIA_DOMAIN: string =
-  process.env.NEXT_PUBLIC_R2_MEDIA_DOMAIN || '';
+  process.env.NEXT_PUBLIC_R2_MEDIA_DOMAIN || 'https://pub-24b13a9fc1b244bca16f253538b62c9f.r2.dev';
 
 // ---------------------------------------------------------------------------
 // Validation helpers
