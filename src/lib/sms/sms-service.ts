@@ -36,9 +36,33 @@ function isMessageCentralConfigured(): boolean {
   const hasSecret = Boolean(
     process.env.MESSAGECENTRAL_AUTH_TOKEN?.trim() ||
       process.env.MESSAGECENTRAL_PASSWORD?.trim() ||
-      process.env.MESSAGECENTRAL_BASE64_KEY?.trim()
+      process.env.MESSAGECENTRAL_BASE64_KEY?.trim() ||
+      process.env.MESSAGECENTRAL_KEY?.trim()
   );
   return Boolean(customerId && hasSecret);
+}
+
+export function getSmsGatewayDiagnostics() {
+  const hasCustomerId = Boolean(process.env.MESSAGECENTRAL_CUSTOMER_ID?.trim());
+  const hasAuthToken = Boolean(process.env.MESSAGECENTRAL_AUTH_TOKEN?.trim());
+  const hasPassword = Boolean(process.env.MESSAGECENTRAL_PASSWORD?.trim());
+  const hasBase64Key = Boolean(
+    process.env.MESSAGECENTRAL_BASE64_KEY?.trim() || process.env.MESSAGECENTRAL_KEY?.trim()
+  );
+  const hasEmail = Boolean(process.env.MESSAGECENTRAL_EMAIL?.trim());
+  const mcReady = isMessageCentralConfigured();
+  const fast2SmsQuickAllowed = process.env.FAST2SMS_ALLOW_QUICK_SMS === 'true';
+
+  return {
+    activePrimaryGateway: mcReady ? 'messagecentral' : 'none-or-unconfigured',
+    messageCentralConfigured: mcReady,
+    hasCustomerId,
+    hasAuthToken,
+    hasPassword,
+    hasBase64Key,
+    hasEmail,
+    fast2SmsQuickAllowed,
+  };
 }
 
 async function getMessageCentralToken(forceRefresh = false): Promise<string | null> {
@@ -52,6 +76,7 @@ async function getMessageCentralToken(forceRefresh = false): Promise<string | nu
   const rawPassword = process.env.MESSAGECENTRAL_PASSWORD?.trim();
   const base64Key =
     process.env.MESSAGECENTRAL_BASE64_KEY?.trim() ||
+    process.env.MESSAGECENTRAL_KEY?.trim() ||
     (rawPassword ? Buffer.from(rawPassword).toString('base64') : '');
   const email = process.env.MESSAGECENTRAL_EMAIL?.trim();
 
@@ -59,27 +84,29 @@ async function getMessageCentralToken(forceRefresh = false): Promise<string | nu
     return staticToken || null;
   }
 
-  const params = new URLSearchParams({
-    country: 'IN',
-    customerId,
-    key: base64Key,
-    scope: 'NEW',
-  });
-  if (email) {
-    params.set('email', email);
+  for (const country of ['IN', '91']) {
+    const params = new URLSearchParams({
+      country,
+      customerId,
+      key: base64Key,
+      scope: 'NEW',
+    });
+    if (email) {
+      params.set('email', email);
+    }
+
+    const res = await fetch(
+      `https://cpaas.messagecentral.com/auth/v1/authentication/token?${params.toString()}`,
+      { method: 'GET', headers: { accept: '*/*' } }
+    );
+    const data = await res.json().catch(() => null);
+    if (res.ok && data?.token) {
+      cachedMcToken = data.token;
+      return cachedMcToken;
+    }
+    console.warn(`[MessageCentral] Token generation failed (country=${country}):`, data);
   }
 
-  const res = await fetch(
-    `https://cpaas.messagecentral.com/auth/v1/authentication/token?${params.toString()}`,
-    { method: 'GET', headers: { accept: '*/*' } }
-  );
-  const data = await res.json();
-  if (res.ok && data?.token) {
-    cachedMcToken = data.token;
-    return cachedMcToken;
-  }
-
-  console.warn('[MessageCentral] Token generation failed:', data);
   return null;
 }
 
@@ -310,11 +337,9 @@ export async function sendOtpToPhone(rawPhone: string): Promise<SendSmsResult> {
   }
 
   // Gateway A: Fast2SMS (India Instant Delivery)
-  // 1st Priority: Dedicated OTP Route (~₹0.20 - ₹0.25 / SMS, requires DLT/website verification)
-  // Fallback: Quick SMS Route ('q' route - ₹7 / SMS) only if not disabled
-  const fast2SmsKey =
-    process.env.FAST2SMS_API_KEY ||
-    'GsZOCXWkv7Rwiwj8Z90M8r7XQ5sFYA6b4DMSV3dgDu26dSozDZwkSkY4SEFQB175Scnex1idSxEAt2Tg';
+  // NOTE: Hardcoded key and automatic ₹7 Quick SMS ('q' route) fallback are intentionally REMOVED
+  // to prevent unexpected ₹7/SMS deductions. Only env FAST2SMS_API_KEY + DLT/OTP route (₹0.25) runs by default.
+  const fast2SmsKey = process.env.FAST2SMS_API_KEY?.trim();
   if (fast2SmsKey) {
     try {
       // Step 1: Try economical OTP route (~₹0.20-₹0.25)
@@ -341,8 +366,8 @@ export async function sendOtpToPhone(rawPhone: string): Promise<SendSmsResult> {
 
       console.warn('[Fast2SMS] OTP route response:', otpData);
 
-      // Step 2: Fallback to Quick SMS route (₹7/SMS) unless disabled
-      if (process.env.FAST2SMS_DISABLE_QUICK_SMS !== 'true' && (otpData.status_code === 996 || !otpData.return)) {
+      // Step 2: NEVER charge ₹7 Quick SMS unless explicitly opted in via FAST2SMS_ALLOW_QUICK_SMS=true
+      if (process.env.FAST2SMS_ALLOW_QUICK_SMS === 'true' && (otpData.status_code === 996 || !otpData.return)) {
         console.warn(
           '[Fast2SMS] OTP route unavailable without DLT/verification. Falling back to Quick SMS route (₹7/SMS).'
         );

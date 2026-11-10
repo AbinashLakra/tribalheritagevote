@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { sendOtpToPhone } from '@/lib/sms/sms-service';
+import { getSmsGatewayDiagnostics, sendOtpToPhone } from '@/lib/sms/sms-service';
+
+export async function GET() {
+  const diagnostics = getSmsGatewayDiagnostics();
+  return NextResponse.json({
+    ok: true,
+    ...diagnostics,
+  });
+}
 
 export async function POST(req: NextRequest) {
   try {
