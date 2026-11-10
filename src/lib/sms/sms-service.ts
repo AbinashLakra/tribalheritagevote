@@ -85,16 +85,20 @@ async function getMessageCentralToken(forceRefresh = false): Promise<string | nu
 
 async function sendViaMessageCentral(
   phone: string
-): Promise<{ success: boolean; verificationId?: string }> {
+): Promise<{ success: boolean; verificationId?: string; errorMessage?: string }> {
   if (!isMessageCentralConfigured()) {
     return { success: false };
   }
 
   const customerId = process.env.MESSAGECENTRAL_CUSTOMER_ID!.trim();
+  let lastError = 'Failed to dispatch SMS OTP via MessageCentral.';
 
   for (let attempt = 0; attempt < 2; attempt++) {
     const token = await getMessageCentralToken(attempt === 1);
-    if (!token) break;
+    if (!token) {
+      lastError = 'MessageCentral authentication failed. Please check Customer ID, Email, Password, or Auth Token.';
+      break;
+    }
 
     const params = new URLSearchParams({
       countryCode: '91',
@@ -121,20 +125,31 @@ async function sendViaMessageCentral(
     }
 
     const data = await res.json().catch(() => null);
+    const code = Number(data?.responseCode ?? data?.status);
     const verificationId = data?.data?.verificationId ? String(data.data.verificationId) : '';
-    if (res.ok && data?.responseCode === 200 && verificationId) {
+
+    if ((res.ok && code === 200 && verificationId) || (code === 506 && verificationId)) {
       return { success: true, verificationId };
     }
 
+    if (code === 506 || data?.message === 'REQUEST_ALREADY_EXISTS') {
+      return {
+        success: false,
+        errorMessage: 'An OTP was already sent to this number recently. Please enter it or wait 60 seconds to resend.',
+      };
+    }
+
     console.warn('[MessageCentral] Send OTP failed:', res.status, data);
-    if (data?.responseCode === 401 && attempt === 0) {
+    if (code === 401 && attempt === 0) {
       cachedMcToken = null;
       continue;
     }
+
+    lastError = data?.data?.errorMessage || data?.message || lastError;
     break;
   }
 
-  return { success: false };
+  return { success: false, errorMessage: lastError };
 }
 
 async function verifyViaMessageCentral(
@@ -252,6 +267,7 @@ export async function sendOtpToPhone(rawPhone: string): Promise<SendSmsResult> {
 
   // Gateway 0 (Primary): MessageCentral VerifyNow (~₹0.25-₹0.30 / SMS, No DLT required)
   if (isMessageCentralConfigured()) {
+    let mcErrorMessage = 'Failed to dispatch SMS OTP via MessageCentral. Please check credentials or balance.';
     try {
       const mcResult = await sendViaMessageCentral(phone);
       if (mcResult.success && mcResult.verificationId) {
@@ -276,16 +292,19 @@ export async function sendOtpToPhone(rawPhone: string): Promise<SendSmsResult> {
           };
         }
         console.warn('[MessageCentral] verificationId exceeded 64 chars, cannot store in otp_codes.');
+      } else if (mcResult.errorMessage) {
+        mcErrorMessage = mcResult.errorMessage;
       }
     } catch (err: any) {
       console.error('MessageCentral delivery error:', err.message);
+      mcErrorMessage = err.message || mcErrorMessage;
     }
 
     // Do not fall back silently to ₹7 Quick SMS when MessageCentral is enabled unless explicitly allowed
     if (process.env.FAST2SMS_ALLOW_QUICK_FALLBACK !== 'true') {
       return {
         success: false,
-        message: 'Failed to dispatch SMS OTP via MessageCentral. Please check credentials or balance.',
+        message: mcErrorMessage,
       };
     }
   }
