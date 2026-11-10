@@ -338,10 +338,10 @@ function VotePageContent() {
 
       setSelectedNominationId('');
       setVoteSuccessNotice(
-        `Vote successfully recorded for ${selectedNom?.artist?.stage_name || 'artist'} in ${activeCategory.name}${trackDisplay}!`
+        `Thank you for voting! Your vote for ${selectedNom?.artist?.stage_name || 'this artist'} in ${activeCategory.name}${trackDisplay} has been confirmed.`
       );
 
-      // Re-fetch ballot data to sync ledger
+      // Re-fetch ballot data
       await fetchBallot();
     } catch (err: any) {
       setError(err.message || 'Error casting vote.');
@@ -383,7 +383,7 @@ function VotePageContent() {
           Loading Official Voting Ballot...
         </h3>
         <p className="text-xs text-slate-500 mt-1">
-          Synchronizing verified cryptographic voting ledger
+          Preparing your verified voting desk...
         </p>
       </div>
     );
@@ -407,7 +407,7 @@ function VotePageContent() {
             </div>
 
             <span className="text-xs font-black uppercase tracking-widest text-emerald-700 block">
-              Official Voting Certificate &amp; Receipt
+              Official Voting Certificate &amp; Thank You
             </span>
 
             <h1 className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight">
@@ -415,7 +415,7 @@ function VotePageContent() {
             </h1>
 
             <p className="text-xs sm:text-sm text-slate-600 max-w-lg mx-auto leading-relaxed">
-              Thank you for upholding tribal heritage and cultural democracy. Your votes across all 12 official award tracks (including separate Male and Female tracks) have been permanently sealed in the database ledger.
+              Thank you for voting! Your voice across all 12 official award tracks truly values and empowers our talented artists and keeps our rich tribal heritage thriving.
             </p>
           </div>
 
@@ -431,7 +431,7 @@ function VotePageContent() {
             </div>
             <div>
               <span className="text-slate-500 block text-[10px] uppercase font-bold">Status:</span>
-              <span className="font-bold text-slate-900">Ballot Sealed &amp; Finalized</span>
+              <span className="font-bold text-slate-900">All Votes Confirmed</span>
             </div>
           </div>
 
@@ -468,13 +468,13 @@ function VotePageContent() {
                           </span>
                         </div>
                         <span className="text-slate-500 text-[11px] truncate block">
-                          {vote.artist?.stage_name || vote.nomination?.title || 'Vote Recorded'}
+                          {vote.artist?.stage_name || vote.nomination?.title || 'Vote Confirmed'}
                         </span>
                       </div>
                     </div>
                     <span className="text-emerald-700 font-extrabold flex items-center gap-1 shrink-0 text-[11px]">
                       <Check className="w-3.5 h-3.5" />
-                      Recorded
+                      Voted
                     </span>
                   </div>
                 );
@@ -516,7 +516,7 @@ function VotePageContent() {
           fetchBallot();
         }}
         title="Verify Mobile Number via OTP to Vote"
-        description="To ensure 1 fair vote per verified citizen and record your vote permanently, please enter your mobile number to receive a 6-digit OTP."
+        description="To keep voting fair and support your favorite artists, please enter your mobile number to receive a 6-digit OTP."
       />
 
       {/* POPUP MODAL: VOTE SUCCESS CONFIRMATION */}
@@ -529,7 +529,7 @@ function VotePageContent() {
 
             <div className="space-y-2">
               <span className="text-[11px] font-black uppercase tracking-widest text-emerald-700 bg-emerald-100 px-3 py-1 rounded-full inline-block">
-                Vote Recorded Successfully!
+                Thank You for Voting!
               </span>
               <h3 className="text-xl font-black text-slate-900">
                 {justVotedInfo.artistName}
@@ -537,8 +537,8 @@ function VotePageContent() {
               <p className="text-xs text-slate-600">
                 Category: <strong>{justVotedInfo.categoryName}</strong>
               </p>
-              <p className="text-xs text-emerald-800 font-semibold bg-emerald-50 p-3 rounded-2xl border border-emerald-200">
-                Aapka vote database ledger me permanently record ho chuka hai. Is artist aur is award track ke liye aapka vote lock ho gaya hai.
+              <p className="text-xs sm:text-sm text-emerald-900 font-semibold bg-emerald-50 p-3.5 rounded-2xl border border-emerald-200 leading-relaxed">
+                Thank you for voting! Your vote truly matters and adds great value, encouragement, and support to our artists and their craft.
               </p>
             </div>
 
@@ -547,10 +547,10 @@ function VotePageContent() {
               <div className="p-3 bg-amber-50 rounded-2xl border border-amber-300 text-left space-y-1">
                 <span className="text-[11px] font-black uppercase tracking-wider text-amber-900 block flex items-center gap-1">
                   <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                  Is Category me {justVotedInfo.otherTrackName} ka Vote Baki Hai!
+                  {justVotedInfo.otherTrackName} Vote Available in This Category!
                 </span>
                 <p className="text-xs text-amber-800">
-                  Aap is category ke <strong>{justVotedInfo.otherTrackName}</strong> ke liye bhi ek alag vote de sakte hain!
+                  You can also cast a separate vote for the <strong>{justVotedInfo.otherTrackName}</strong> in this category!
                 </p>
               </div>
             )}
@@ -609,7 +609,7 @@ function VotePageContent() {
               Dharti Abba Veer Birsa Munda Voting Desk
             </h1>
             <p className="text-xs sm:text-sm text-blue-200">
-              Aap jis artist ko chahein vote de sakte hain. Categories 2, 3, 4, 5 me Male aur Female dono ke liye alag alag vote de sakte hain (Total 12 Award Tracks). Vote dekar aap kabhi bhi Log Out karke exit kar sakte hain.
+              Vote for the artists you love! For Categories 2, 3, 4, and 5, you can cast separate votes for both Male and Female award tracks (12 award tracks total). You can log out anytime once you are done.
             </p>
           </div>
 
@@ -1094,7 +1094,7 @@ function VotePageContent() {
                   {isSubmittingVote ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Recording Vote in Ledger...</span>
+                      <span>Submitting Your Vote...</span>
                     </>
                   ) : (
                     <>

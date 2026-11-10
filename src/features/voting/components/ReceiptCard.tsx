@@ -36,9 +36,9 @@ export function ReceiptCard({
         <span className="text-xs uppercase font-bold tracking-widest text-terracotta-300">
           Official Digital Ballot
         </span>
-        <h2 className="text-2xl font-bold">Vote Verified & Recorded</h2>
+        <h2 className="text-2xl font-bold">Thank You for Voting!</h2>
         <p className="text-xs text-ivory-200">
-          Permanent, immutable record in PostgreSQL ledger
+          Your vote truly values and encourages our talented artists
         </p>
       </div>
 
