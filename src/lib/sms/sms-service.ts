@@ -29,9 +29,191 @@ function hashOtp(phone: string, code: string): string {
   return crypto.createHmac('sha256', salt).update(`${phone}:${code}`).digest('hex');
 }
 
+let cachedMcToken: string | null = null;
+
+function isMessageCentralConfigured(): boolean {
+  const customerId = process.env.MESSAGECENTRAL_CUSTOMER_ID?.trim();
+  const hasSecret = Boolean(
+    process.env.MESSAGECENTRAL_AUTH_TOKEN?.trim() ||
+      process.env.MESSAGECENTRAL_PASSWORD?.trim() ||
+      process.env.MESSAGECENTRAL_BASE64_KEY?.trim()
+  );
+  return Boolean(customerId && hasSecret);
+}
+
+async function getMessageCentralToken(forceRefresh = false): Promise<string | null> {
+  const staticToken = process.env.MESSAGECENTRAL_AUTH_TOKEN?.trim();
+  if (!forceRefresh) {
+    if (cachedMcToken) return cachedMcToken;
+    if (staticToken) return staticToken;
+  }
+
+  const customerId = process.env.MESSAGECENTRAL_CUSTOMER_ID?.trim();
+  const rawPassword = process.env.MESSAGECENTRAL_PASSWORD?.trim();
+  const base64Key =
+    process.env.MESSAGECENTRAL_BASE64_KEY?.trim() ||
+    (rawPassword ? Buffer.from(rawPassword).toString('base64') : '');
+  const email = process.env.MESSAGECENTRAL_EMAIL?.trim();
+
+  if (!customerId || !base64Key) {
+    return staticToken || null;
+  }
+
+  const params = new URLSearchParams({
+    country: 'IN',
+    customerId,
+    key: base64Key,
+    scope: 'NEW',
+  });
+  if (email) {
+    params.set('email', email);
+  }
+
+  const res = await fetch(
+    `https://cpaas.messagecentral.com/auth/v1/authentication/token?${params.toString()}`,
+    { method: 'GET', headers: { accept: '*/*' } }
+  );
+  const data = await res.json();
+  if (res.ok && data?.token) {
+    cachedMcToken = data.token;
+    return cachedMcToken;
+  }
+
+  console.warn('[MessageCentral] Token generation failed:', data);
+  return null;
+}
+
+async function sendViaMessageCentral(
+  phone: string
+): Promise<{ success: boolean; verificationId?: string }> {
+  if (!isMessageCentralConfigured()) {
+    return { success: false };
+  }
+
+  const customerId = process.env.MESSAGECENTRAL_CUSTOMER_ID!.trim();
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const token = await getMessageCentralToken(attempt === 1);
+    if (!token) break;
+
+    const params = new URLSearchParams({
+      countryCode: '91',
+      customerId,
+      flowType: 'SMS',
+      mobileNumber: phone,
+      otpLength: '6',
+    });
+
+    const res = await fetch(
+      `https://cpaas.messagecentral.com/verification/v3/send?${params.toString()}`,
+      {
+        method: 'POST',
+        headers: {
+          authToken: token,
+          accept: '*/*',
+        },
+      }
+    );
+
+    if (res.status === 401 && attempt === 0) {
+      cachedMcToken = null;
+      continue;
+    }
+
+    const data = await res.json().catch(() => null);
+    const verificationId = data?.data?.verificationId ? String(data.data.verificationId) : '';
+    if (res.ok && data?.responseCode === 200 && verificationId) {
+      return { success: true, verificationId };
+    }
+
+    console.warn('[MessageCentral] Send OTP failed:', res.status, data);
+    if (data?.responseCode === 401 && attempt === 0) {
+      cachedMcToken = null;
+      continue;
+    }
+    break;
+  }
+
+  return { success: false };
+}
+
+async function verifyViaMessageCentral(
+  phone: string,
+  verificationId: string,
+  code: string
+): Promise<{ success: boolean; expired?: boolean; message: string }> {
+  const customerId = process.env.MESSAGECENTRAL_CUSTOMER_ID?.trim();
+  if (!customerId) {
+    return { success: false, message: 'MessageCentral customer ID is not configured.' };
+  }
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const token = await getMessageCentralToken(attempt === 1);
+    if (!token) break;
+
+    const params = new URLSearchParams({
+      countryCode: '91',
+      mobileNumber: phone,
+      verificationId,
+      customerId,
+      code,
+    });
+
+    const res = await fetch(
+      `https://cpaas.messagecentral.com/verification/v3/validateOtp?${params.toString()}`,
+      {
+        method: 'GET',
+        headers: {
+          authToken: token,
+          accept: '*/*',
+        },
+      }
+    );
+
+    if (res.status === 401 && attempt === 0) {
+      cachedMcToken = null;
+      continue;
+    }
+
+    const data = await res.json().catch(() => null);
+    const status = data?.data?.verificationStatus;
+    if (
+      res.ok &&
+      (data?.responseCode === 200 || data?.status === 200) &&
+      status === 'VERIFICATION_COMPLETED'
+    ) {
+      return { success: true, message: 'Phone number verified successfully.' };
+    }
+
+    if (status === 'EXPIRED' || data?.responseCode === 705) {
+      return {
+        success: false,
+        expired: true,
+        message: 'OTP has expired. Please click Resend OTP.',
+      };
+    }
+
+    console.warn('[MessageCentral] Validate OTP response:', res.status, data);
+    if (data?.responseCode === 401 && attempt === 0) {
+      cachedMcToken = null;
+      continue;
+    }
+
+    return {
+      success: false,
+      message: 'Incorrect OTP. Please enter the valid 6-digit code received on your phone.',
+    };
+  }
+
+  return {
+    success: false,
+    message: 'Unable to validate OTP at the moment. Please try again.',
+  };
+}
+
 /**
  * Generates a cryptographically random 6-digit OTP, stores it in Supabase with 5-minute expiry,
- * and sends it via the configured SMS Gateway (Fast2SMS, Twilio, 2Factor, or Sandbox).
+ * and sends it via the configured SMS Gateway (MessageCentral VerifyNow, Fast2SMS, Twilio, 2Factor, or Sandbox).
  */
 export async function sendOtpToPhone(rawPhone: string): Promise<SendSmsResult> {
   const phone = cleanIndianPhone(rawPhone);
@@ -68,9 +250,49 @@ export async function sendOtpToPhone(rawPhone: string): Promise<SendSmsResult> {
 
   // 3. Dispatch SMS via configured Gateway
 
+  // Gateway 0 (Primary): MessageCentral VerifyNow (~₹0.25-₹0.30 / SMS, No DLT required)
+  if (isMessageCentralConfigured()) {
+    try {
+      const mcResult = await sendViaMessageCentral(phone);
+      if (mcResult.success && mcResult.verificationId) {
+        const storedValue = `MC:${mcResult.verificationId}`;
+        if (storedValue.length <= 64) {
+          await admin
+            .from('otp_codes')
+            .upsert(
+              {
+                phone,
+                code_hash: storedValue,
+                attempts: 0,
+                expires_at: expiresAt,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: 'phone' }
+            );
+          return {
+            success: true,
+            message: `Real SMS OTP dispatched to +91 ${phone} via MessageCentral.`,
+            gateway: 'messagecentral',
+          };
+        }
+        console.warn('[MessageCentral] verificationId exceeded 64 chars, cannot store in otp_codes.');
+      }
+    } catch (err: any) {
+      console.error('MessageCentral delivery error:', err.message);
+    }
+
+    // Do not fall back silently to ₹7 Quick SMS when MessageCentral is enabled unless explicitly allowed
+    if (process.env.FAST2SMS_ALLOW_QUICK_FALLBACK !== 'true') {
+      return {
+        success: false,
+        message: 'Failed to dispatch SMS OTP via MessageCentral. Please check credentials or balance.',
+      };
+    }
+  }
+
   // Gateway A: Fast2SMS (India Instant Delivery)
-  // 1st Priority: Dedicated OTP Route (~₹0.20 - ₹0.25 / SMS, requires Fast2SMS website verification)
-  // Fallback: Quick SMS Route ('q' route - ₹7 / SMS) until website verification is active
+  // 1st Priority: Dedicated OTP Route (~₹0.20 - ₹0.25 / SMS, requires DLT/website verification)
+  // Fallback: Quick SMS Route ('q' route - ₹7 / SMS) only if not disabled
   const fast2SmsKey =
     process.env.FAST2SMS_API_KEY ||
     'GsZOCXWkv7Rwiwj8Z90M8r7XQ5sFYA6b4DMSV3dgDu26dSozDZwkSkY4SEFQB175Scnex1idSxEAt2Tg';
@@ -100,10 +322,10 @@ export async function sendOtpToPhone(rawPhone: string): Promise<SendSmsResult> {
 
       console.warn('[Fast2SMS] OTP route response:', otpData);
 
-      // Step 2: Fallback to Quick SMS route if OTP route not yet verified on Fast2SMS dashboard
-      if (otpData.status_code === 996 || !otpData.return) {
+      // Step 2: Fallback to Quick SMS route (₹7/SMS) unless disabled
+      if (process.env.FAST2SMS_DISABLE_QUICK_SMS !== 'true' && (otpData.status_code === 996 || !otpData.return)) {
         console.warn(
-          '[Fast2SMS] Note: Complete 1-min website verification in Fast2SMS dashboard (under OTP menu) to unlock ₹0.25 rate. Falling back to Quick SMS route.'
+          '[Fast2SMS] OTP route unavailable without DLT/verification. Falling back to Quick SMS route (₹7/SMS).'
         );
         const qRes = await fetch('https://www.fast2sms.com/dev/bulkV2', {
           method: 'POST',
@@ -260,6 +482,23 @@ export async function verifyOtpCode(rawPhone: string, enteredCode: string): Prom
   // Check failed attempts limit (max 5)
   if (record.attempts >= 5) {
     return { success: false, message: 'Maximum verification attempts exceeded. Please request a fresh OTP.' };
+  }
+
+  // MessageCentral VerifyNow server-side OTP validation
+  if (typeof record.code_hash === 'string' && record.code_hash.startsWith('MC:')) {
+    const verificationId = record.code_hash.slice(3);
+    const mcVerify = await verifyViaMessageCentral(phone, verificationId, cleanCode);
+    if (mcVerify.success) {
+      await admin.from('otp_codes').delete().eq('phone', phone);
+      return { success: true, message: mcVerify.message };
+    }
+    if (!mcVerify.expired) {
+      await admin
+        .from('otp_codes')
+        .update({ attempts: record.attempts + 1, updated_at: new Date().toISOString() })
+        .eq('phone', phone);
+    }
+    return { success: false, message: mcVerify.message };
   }
 
   const expectedHash = hashOtp(phone, cleanCode);
