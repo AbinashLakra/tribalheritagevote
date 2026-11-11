@@ -173,7 +173,7 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
     return description.trim().split(/\s+/).filter(Boolean).length;
   }, [description]);
 
-  // Handle Avatar Selection
+  // Handle Avatar Selection (automatically downscales camera photos to keep R2 & upload payloads fast)
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
     if (!selected) return;
@@ -183,7 +183,28 @@ export function NominationForm({ contestId, categories, onComplete }: Nomination
     }
     const reader = new FileReader();
     reader.onload = () => {
-      setAvatarPreview(reader.result as string);
+      const dataUrl = reader.result as string;
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const maxDim = 640;
+          const scale = Math.min(1, maxDim / Math.max(img.width || 1, img.height || 1));
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(img.width * scale));
+          canvas.height = Math.max(1, Math.round(img.height * scale));
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            setAvatarPreview(canvas.toDataURL('image/jpeg', 0.85));
+            return;
+          }
+        } catch {
+          // fallback to original DataURL if canvas draw fails
+        }
+        setAvatarPreview(dataUrl);
+      };
+      img.onerror = () => setAvatarPreview(dataUrl);
+      img.src = dataUrl;
     };
     reader.readAsDataURL(selected);
   };

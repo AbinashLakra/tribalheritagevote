@@ -1,9 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { CreateMultipartUploadCommand } from '@aws-sdk/client-s3';
+import { CreateMultipartUploadCommand, PutObjectCommand, type S3Client } from '@aws-sdk/client-s3';
 import { getR2Client } from '@/lib/r2/client';
-import { R2_BUCKET_NAME, isAllowedVideoType, isFileSizeValid, isVideoDurationValid } from '@/config/r2';
+import { R2_BUCKET_NAME, R2_MEDIA_DOMAIN, isAllowedVideoType, isFileSizeValid, isVideoDurationValid } from '@/config/r2';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { extractExtension } from '@/lib/r2/object-keys';
+
+/**
+ * Uploads inline base64 avatar data URIs directly to Cloudflare R2 so large
+ * image strings are never stored in Supabase or returned in ballot JSON responses.
+ */
+async function uploadBase64AvatarToR2(
+  avatarUrl: string | null | undefined,
+  userId: string,
+  s3: S3Client
+): Promise<string | null> {
+  if (!avatarUrl) return null;
+  if (!avatarUrl.startsWith('data:image/')) return avatarUrl;
+
+  const match = avatarUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+  if (!match) return null;
+
+  try {
+    const contentType = match[1];
+    const buffer = Buffer.from(match[2], 'base64');
+    const ext = contentType === 'image/png' ? 'png' : contentType === 'image/webp' ? 'webp' : 'jpg';
+    const key = `avatars/${userId}-${Date.now()}.${ext}`;
+
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: R2_BUCKET_NAME,
+        Key: key,
+        Body: buffer,
+        ContentType: contentType,
+        CacheControl: 'public, max-age=31536000, immutable',
+      })
+    );
+
+    const cdnBase = R2_MEDIA_DOMAIN.replace(/\/+$/, '');
+    return `${cdnBase}/${key}`;
+  } catch (err) {
+    console.warn('[Avatar R2 Upload] Failed to offload base64 avatar to R2:', err);
+    return null;
+  }
+}
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -151,7 +190,11 @@ export async function POST(req: NextRequest) {
         { onConflict: 'id' }
       );
 
-    // 4. Ensure `artist_profiles` record exists
+    // 4. Upload avatar image to Cloudflare R2 (prevent MB-scale base64 strings in Supabase/ballot JSON)
+    const s3 = getR2Client();
+    const resolvedAvatarUrl = await uploadBase64AvatarToR2(avatarUrl, userId, s3);
+
+    // Ensure `artist_profiles` record exists
     const { data: artistProfile, error: profileError } = await admin
       .from('artist_profiles')
       .upsert(
@@ -166,7 +209,7 @@ export async function POST(req: NextRequest) {
           primary_category: categoryName || 'Tribal & Folk Performing Arts',
           experience_years: Number(experienceYears) || 3,
           verification_status: 'verified',
-          avatar_url: avatarUrl || null,
+          ...(resolvedAvatarUrl ? { avatar_url: resolvedAvatarUrl } : {}),
           phone: cleanPhone,
           email: inputEmail || email,
           is_phone_verified: true,
@@ -185,7 +228,6 @@ export async function POST(req: NextRequest) {
     }
 
     // 5. Initialize S3 / Cloudflare R2 Multipart Upload
-    const s3 = getR2Client();
     const cleanContestId = contestId || 'a1111111-1111-1111-1111-111111111111';
     const timestamp = Date.now();
     const objectKey = `nominations/${cleanContestId}/${artistProfile.id}/${timestamp}.${extension}`;
