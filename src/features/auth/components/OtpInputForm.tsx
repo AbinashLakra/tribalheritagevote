@@ -8,9 +8,16 @@ interface OtpInputFormProps {
   onVerify: (otp: string) => Promise<{ success: boolean; message: string }>;
   onBack: () => void;
   onResend: () => Promise<{ success: boolean; message: string }>;
+  backLabel?: string;
 }
 
-export function OtpInputForm({ phone, onVerify, onBack, onResend }: OtpInputFormProps) {
+export function OtpInputForm({
+  phone,
+  onVerify,
+  onBack,
+  onResend,
+  backLabel = 'Change number',
+}: OtpInputFormProps) {
   const [otp, setOtp] = useState<string[]>(['', '', '', '', '', '']);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -152,7 +159,7 @@ export function OtpInputForm({ phone, onVerify, onBack, onResend }: OtpInputForm
           disabled={isSubmitting}
           className="inline-flex items-center gap-1.5 text-sm text-charcoal-600 hover:text-charcoal-900 transition-colors"
         >
-          <ArrowLeft className="w-4 h-4" /> Change number
+          <ArrowLeft className="w-4 h-4" /> {backLabel}
         </button>
 
         <button

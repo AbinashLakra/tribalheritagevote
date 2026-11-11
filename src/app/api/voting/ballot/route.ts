@@ -94,6 +94,10 @@ export async function GET(request: NextRequest) {
       .eq('user_id', user.id)
       .maybeSingle();
 
+    const voterEmail =
+      user.email && !user.email.endsWith('@tribalheritage.org') ? user.email : null;
+    const voterPhone = user.phone || user.user_metadata?.phone || null;
+
     if (!voterIdentity || !voterIdentity.is_verified) {
       return NextResponse.json({
         success: true,
@@ -101,7 +105,8 @@ export async function GET(request: NextRequest) {
           contest: contest || { id: contestId, title: 'Tribal Heritage Vote 2026', status: 'open' },
           isAuthenticated: true,
           isVerified: false,
-          voterPhone: user.phone || user.user_metadata?.phone || null,
+          voterPhone,
+          voterEmail,
           votedCount: 0,
           totalCategories: 8,
           votedCategoryIds: [],
@@ -151,7 +156,8 @@ export async function GET(request: NextRequest) {
         isAuthenticated: true,
         isVerified: true,
         voterId: voterIdentity.id,
-        voterPhone: user.phone || user.user_metadata?.phone || null,
+        voterPhone,
+        voterEmail,
         votedCount,
         totalCategories: 8,
         totalTracks: 12,

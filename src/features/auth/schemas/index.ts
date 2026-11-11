@@ -25,6 +25,14 @@ export const phoneInputSchema = z.object({
   countryCode: z.string().default("+91"),
 });
 
+/** Email schema for free voter verification */
+export const emailSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .email("Please enter a valid email address (e.g. name@gmail.com)")
+  .max(254, "Email address is too long");
+
 export type PhoneInput = z.infer<typeof phoneInputSchema>;
 export type OtpInput = z.infer<typeof otpSchema>;
 

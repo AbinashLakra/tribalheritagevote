@@ -77,6 +77,7 @@ function VotePageContent() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isVerified, setIsVerified] = useState(false);
   const [voterPhone, setVoterPhone] = useState<string | null>(null);
+  const [voterEmail, setVoterEmail] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [nominationsByCategory, setNominationsByCategory] = useState<Record<string, ArtistNomination[]>>({});
   const [votedCategoryIds, setVotedCategoryIds] = useState<string[]>([]);
@@ -122,6 +123,7 @@ function VotePageContent() {
       setIsAuthenticated(bData.isAuthenticated);
       setIsVerified(bData.isVerified);
       setVoterPhone(bData.voterPhone);
+      setVoterEmail(bData.voterEmail || null);
       setCategories(bData.categories || []);
       setNominationsByCategory(bData.nominationsByCategory || {});
       setVotedCategoryIds(bData.votedCategoryIds || []);
@@ -242,6 +244,7 @@ function VotePageContent() {
     setIsAuthenticated(false);
     setIsVerified(false);
     setVoterPhone(null);
+    setVoterEmail(null);
     setVotedCategoryIds([]);
     setVotedTrackKeys([]);
     setVotedNominationIds([]);
@@ -422,8 +425,10 @@ function VotePageContent() {
           {/* Voter Info Strip */}
           <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between text-xs text-slate-700 gap-2">
             <div>
-              <span className="text-slate-500 block text-[10px] uppercase font-bold">Verified Voter Mobile:</span>
-              <span className="font-mono font-bold text-slate-900">+91 {voterPhone || 'Verified Citizen'}</span>
+              <span className="text-slate-500 block text-[10px] uppercase font-bold">Verified Voter:</span>
+              <span className="font-mono font-bold text-slate-900">
+                {voterPhone ? `+91 ${voterPhone}` : voterEmail || 'Verified Citizen'}
+              </span>
             </div>
             <div>
               <span className="text-slate-500 block text-[10px] uppercase font-bold">Total Votes Cast:</span>
@@ -507,7 +512,7 @@ function VotePageContent() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      {/* Phone Verification Modal (Triggered on login / before vote) */}
+      {/* Voter Verification Modal (Triggered on login / before vote) */}
       <PhoneVerificationModal
         isOpen={showPhoneModal}
         onClose={() => setShowPhoneModal(false)}
@@ -515,8 +520,8 @@ function VotePageContent() {
           setShowPhoneModal(false);
           fetchBallot();
         }}
-        title="Verify Mobile Number via OTP to Vote"
-        description="To keep voting fair and support your favorite artists, please enter your mobile number to receive a 6-digit OTP."
+        title="Verify Your Email to Vote"
+        description="To keep voting fair and support your favorite artists, please enter your email address to receive a free 6-digit verification code."
       />
 
       {/* POPUP MODAL: VOTE SUCCESS CONFIRMATION */}
@@ -621,7 +626,7 @@ function VotePageContent() {
                 {isVerified ? (
                   <>
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                    +91 {voterPhone || 'Verified'}
+                    {voterPhone ? `+91 ${voterPhone}` : voterEmail || 'Verified'}
                   </>
                 ) : (
                   <button
@@ -629,7 +634,7 @@ function VotePageContent() {
                     className="text-amber-300 underline font-extrabold flex items-center gap-1"
                   >
                     <Smartphone className="w-3 h-3" />
-                    <span>Login via Mobile OTP</span>
+                    <span>Login via Email OTP</span>
                   </button>
                 )}
               </span>
@@ -1116,7 +1121,7 @@ function VotePageContent() {
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-emerald-600" />
             <span>
-              Verified Voter: <strong>+91 {voterPhone}</strong> • You have cast <strong>{votedTracksCount} of {totalTracks}</strong> votes.
+              Verified Voter: <strong>{voterPhone ? `+91 ${voterPhone}` : voterEmail || 'Verified Citizen'}</strong> • You have cast <strong>{votedTracksCount} of {totalTracks}</strong> votes.
             </span>
           </div>
 

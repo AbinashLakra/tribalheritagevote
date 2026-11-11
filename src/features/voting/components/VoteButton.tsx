@@ -128,13 +128,13 @@ export function VoteButton({
         </div>
       )}
 
-      {/* Step 1: Phone Verification Modal */}
+      {/* Step 1: Voter Verification Modal */}
       <PhoneVerificationModal
         isOpen={showPhoneModal}
         onClose={() => setShowPhoneModal(false)}
         onSuccess={handlePhoneVerificationSuccess}
-        title="Verify Phone to Vote"
-        description={`To vote for ${artistName}, please verify your mobile number. Each citizen may cast strictly one vote.`}
+        title="Verify Your Email to Vote"
+        description={`To vote for ${artistName}, please verify your email address with a free 6-digit code. Each citizen may cast strictly one vote.`}
       />
 
       {/* Step 2: Explicit Confirmation Dialog */}
