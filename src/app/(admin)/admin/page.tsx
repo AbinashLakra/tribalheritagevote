@@ -10,8 +10,21 @@ import {
   ArrowRight,
   UserCheck,
   Shield,
+  Eye,
+  EyeOff,
+  BarChart3,
+  Flame,
 } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
+import {
+  VoteLeadingDashboard,
+  NominationData,
+} from '@/features/admin/components/VoteLeadingDashboard';
+import {
+  enhanceNominationsWithBoost,
+  extractContestSettings,
+  CONTEST_OFFICIAL_TIMELINE,
+} from '@/lib/voting/vote-display-calculator';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,13 +55,58 @@ export default async function AdminDashboardPage() {
     admin.from('admin_access_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
   ]);
 
-  // Fetch active contest status
+  // Fetch active contest configuration & settings
   const { data: contest } = await admin
     .from('contests')
-    .select('title, status, voting_start_at, voting_end_at, leaderboard_visibility')
+    .select('id, title, status, voting_start_at, voting_end_at, leaderboard_visibility, settings, reopening_reason')
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
+
+  const contestId = contest?.id || 'a1111111-1111-1111-1111-111111111111';
+  const contestSettings = extractContestSettings(contest);
+
+  // Fetch all approved nominations for leading graph & flow chart
+  const { data: rawNominations } = await admin
+    .from('nominations')
+    .select(`
+      id,
+      title,
+      category_id,
+      sub_category,
+      vote_count,
+      category:contest_categories(name),
+      artist:artist_profiles(id, stage_name, full_name, state, district, avatar_url)
+    `)
+    .eq('contest_id', contestId)
+    .eq('status', 'approved');
+
+  // Compute organic presentation layer boost for dashboard dual-ledger
+  const enhancedList = enhanceNominationsWithBoost(rawNominations || [], contest);
+
+  const formattedNominations: NominationData[] = enhancedList.map((n) => {
+    const artistData = (n.artist as any) || {};
+    const catData = (n.category as any) || {};
+
+    return {
+      id: n.id,
+      title: n.title,
+      category_id: n.category_id,
+      sub_category: n.sub_category || 'general',
+      category_name: catData.name || 'Art Category',
+      real_votes: n.real_vote_count,
+      synthetic_boost: n.synthetic_boost,
+      displayed_votes: n.displayed_vote_count,
+      artist: {
+        id: artistData.id || n.id,
+        stage_name: artistData.stage_name || n.title,
+        full_name: artistData.full_name || '',
+        state: artistData.state || 'Odisha',
+        district: artistData.district || 'Sundargarh',
+        avatar_url: artistData.avatar_url || null,
+      },
+    };
+  });
 
   return (
     <div className="space-y-8">
@@ -62,7 +120,8 @@ export default async function AdminDashboardPage() {
             Executive Control Overview
           </h1>
           <p className="text-xs sm:text-sm text-slate-600 mt-1">
-            Active Contest: <strong>{contest?.title || 'Dharti Abba Veer Birsa Munda Cultural & Film Awards 2026'}</strong> (Status: <span className="uppercase text-blue-700 font-bold">{contest?.status || 'draft'}</span>)
+            Active Contest: <strong>{contest?.title || 'Dharti Abba Veer Birsa Munda Cultural & Film Awards 2026'}</strong> (Status:{' '}
+            <span className="uppercase text-blue-700 font-bold">{contest?.status || 'draft'}</span>)
           </p>
         </div>
 
@@ -102,7 +161,8 @@ export default async function AdminDashboardPage() {
             </div>
             <div>
               <h4 className="text-sm font-bold text-slate-900">
-                {pendingAdminRequests || 0} Staff Admin Application{(pendingAdminRequests || 0) > 1 ? 's' : ''} Awaiting Review
+                {pendingAdminRequests || 0} Staff Admin Application
+                {(pendingAdminRequests || 0) > 1 ? 's' : ''} Awaiting Review
               </h4>
               <p className="text-xs text-slate-600">
                 Staff members have submitted verified access requests. Review and assign granular permissions.
@@ -118,6 +178,19 @@ export default async function AdminDashboardPage() {
           </Link>
         </div>
       )}
+
+      {/* ──────────────── MAIN ADMIN VOTE LEADING GRAPH & ANALYTICS DASHBOARD ──────────────── */}
+      <VoteLeadingDashboard
+        contestId={contestId}
+        contestTitle={contest?.title || 'Dharti Abba Veer Birsa Munda Cultural & Film Awards 2026'}
+        contestStatus={contest?.status || 'open'}
+        votingStartAt={contest?.voting_start_at || CONTEST_OFFICIAL_TIMELINE.startAt}
+        votingEndAt={contest?.voting_end_at || CONTEST_OFFICIAL_TIMELINE.endAt}
+        initialShowPublicVotes={contestSettings.show_public_votes}
+        initialBoostEnabled={contestSettings.boost_enabled}
+        initialBoostVelocityPerDay={contestSettings.boost_velocity_per_day}
+        nominations={formattedNominations}
+      />
 
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -141,16 +214,14 @@ export default async function AdminDashboardPage() {
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Accepted Verified Votes
+              Accepted Verified Votes (Real DB)
             </span>
             <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
               <Award className="w-4 h-4" />
             </div>
           </div>
           <p className="text-3xl font-extrabold text-emerald-700">{totalVotes || 0}</p>
-          <p className="text-xs text-slate-500">
-            Recorded in immutable PostgreSQL ledger
-          </p>
+          <p className="text-xs text-slate-500">Recorded in immutable PostgreSQL ledger</p>
         </div>
 
         {/* KPI 3: Citizens */}
@@ -164,9 +235,7 @@ export default async function AdminDashboardPage() {
             </div>
           </div>
           <p className="text-3xl font-extrabold text-[#0f2d59]">{totalVoters || 0}</p>
-          <p className="text-xs text-slate-500">
-            OTP mobile verified identities (+91)
-          </p>
+          <p className="text-xs text-slate-500">OTP mobile verified identities (+91)</p>
         </div>
 
         {/* KPI 4: Fraud Attempts Blocked */}
@@ -180,16 +249,14 @@ export default async function AdminDashboardPage() {
             </div>
           </div>
           <p className="text-3xl font-extrabold text-red-600">{duplicateAttempts || 0}</p>
-          <p className="text-xs text-slate-500">
-            Strictly trapped by 1-vote unique constraint
-          </p>
+          <p className="text-xs text-slate-500">Strictly trapped by 1-vote unique constraint</p>
         </div>
 
         {/* KPI 5: Contest Lifecycle */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Contest State
+              Contest State &amp; Public Visibility
             </span>
             <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center">
               <Clock className="w-4 h-4" />
@@ -197,7 +264,10 @@ export default async function AdminDashboardPage() {
           </div>
           <p className="text-2xl font-bold uppercase text-[#0f2d59]">{contest?.status || 'draft'}</p>
           <p className="text-xs text-slate-500">
-            Leaderboard visibility: {contest?.leaderboard_visibility || 'live'}
+            Public Visibility:{' '}
+            <span className="font-bold text-slate-800">
+              {contestSettings.show_public_votes ? '🟢 Visible' : '🔒 Hidden'}
+            </span>
           </p>
         </div>
 
@@ -212,7 +282,7 @@ export default async function AdminDashboardPage() {
             </div>
           </div>
           <p className="text-2xl font-bold text-emerald-700">100% Certified</p>
-          <p className="text-xs text-slate-500">Zero unverified or simulated ballots</p>
+          <p className="text-xs text-slate-500">Real citizen winner selection</p>
         </div>
       </div>
     </div>

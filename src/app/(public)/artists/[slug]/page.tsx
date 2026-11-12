@@ -4,6 +4,7 @@ import { ArrowLeft, MapPin, Award, ShieldCheck, Heart, User, Sparkles, CheckCirc
 import { createAdminClient } from '@/lib/supabase/admin';
 import { VideoPlayer } from '@/components/shared/VideoPlayer';
 import { VoteButton } from '@/features/voting/components/VoteButton';
+import { calculateDisplayedVoteCount, extractContestSettings } from '@/lib/voting/vote-display-calculator';
 
 export const dynamic = 'force-dynamic';
 
@@ -77,9 +78,24 @@ export default async function ArtistProfilePage({ params }: ArtistProfilePagePro
   const contestId = nomination?.contest_id || 'a1111111-1111-1111-1111-111111111111';
   const { data: contest } = await admin
     .from('contests')
-    .select('title, status, voting_start_at, voting_end_at')
+    .select('title, status, voting_start_at, voting_end_at, settings, leaderboard_visibility, reopening_reason')
     .eq('id', contestId)
     .maybeSingle();
+
+  const contestSettings = extractContestSettings(contest);
+
+  let displayedVoteCount = nomination?.vote_count ?? 0;
+  if (nomination) {
+    const calc = calculateDisplayedVoteCount({
+      nominationId: nomination.id,
+      realVotes: nomination.vote_count || 0,
+      startAt: contest?.voting_start_at,
+      endAt: contest?.voting_end_at,
+      boostEnabled: contestSettings.boost_enabled,
+      isReopened: Boolean(contest?.reopening_reason && contest?.status === 'open'),
+    });
+    displayedVoteCount = calc.displayedVotes;
+  }
 
   const videoUrl = nomination?.upload_record?.public_url || '';
   const isVotingOpen = contest?.status === 'open';
@@ -184,10 +200,10 @@ export default async function ArtistProfilePage({ params }: ArtistProfilePagePro
             <div className="space-y-4">
               <div className="text-center">
                 <span className="text-xs uppercase font-bold tracking-wider text-charcoal-500">
-                  Accepted Citizen Votes
+                  {contestSettings.show_public_votes ? 'Accepted Citizen Votes' : 'Official Entry'}
                 </span>
                 <p className="text-4xl font-extrabold text-forest-800 mt-1">
-                  {nomination?.vote_count ?? 0}
+                  {contestSettings.show_public_votes ? displayedVoteCount : '🔒 Sealed'}
                 </p>
               </div>
 

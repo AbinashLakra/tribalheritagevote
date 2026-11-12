@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ART_CATEGORIES } from '@/lib/constants/art-categories';
+import { enhanceNominationsWithBoost, extractContestSettings } from '@/lib/voting/vote-display-calculator';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,12 +18,14 @@ export async function GET(request: NextRequest) {
 
     const admin = createAdminClient();
 
-    // 1. Fetch Contest Info
+    // 1. Fetch Contest Info with Settings & Visibility
     const { data: contest } = await admin
       .from('contests')
-      .select('id, title, status, voting_start_at, voting_end_at')
+      .select('id, title, status, voting_start_at, voting_end_at, settings, leaderboard_visibility')
       .eq('id', contestId)
       .maybeSingle();
+
+    const contestSettings = extractContestSettings(contest);
 
     // 2. Fetch all 8 Categories
     const { data: dbCategories } = await admin
@@ -41,8 +44,8 @@ export async function GET(request: NextRequest) {
             display_order: index + 1,
           }));
 
-    // 3. Fetch all approved nominations grouped by category
-    const { data: nominations } = await admin
+    // 3. Fetch all approved nominations
+    const { data: rawNominations } = await admin
       .from('nominations')
       .select(`
         id,
@@ -58,10 +61,16 @@ export async function GET(request: NextRequest) {
       .eq('status', 'approved')
       .eq('is_disqualified', false);
 
+    // Apply Organic Display Boost Presentation Layer
+    const enhancedNominations = enhanceNominationsWithBoost(
+      rawNominations || [],
+      contest
+    );
+
     // Group nominations by category_id
     const categoryNominations: Record<string, any[]> = {};
     categories.forEach((cat) => {
-      categoryNominations[cat.id] = (nominations || []).filter(
+      categoryNominations[cat.id] = (enhancedNominations || []).filter(
         (nom) => nom.category_id === cat.id
       );
     });
@@ -72,6 +81,7 @@ export async function GET(request: NextRequest) {
         success: true,
         data: {
           contest: contest || { id: contestId, title: 'Tribal Heritage Vote 2026', status: 'open' },
+          showPublicVotes: contestSettings.show_public_votes,
           isAuthenticated: false,
           isVerified: false,
           voterPhone: null,
@@ -103,6 +113,7 @@ export async function GET(request: NextRequest) {
         success: true,
         data: {
           contest: contest || { id: contestId, title: 'Tribal Heritage Vote 2026', status: 'open' },
+          showPublicVotes: contestSettings.show_public_votes,
           isAuthenticated: true,
           isVerified: false,
           voterPhone,
@@ -153,6 +164,7 @@ export async function GET(request: NextRequest) {
       success: true,
       data: {
         contest: contest || { id: contestId, title: 'Dharti Abba Veer Birsa Munda Cultural & Film Awards 2026', status: 'open' },
+        showPublicVotes: contestSettings.show_public_votes,
         isAuthenticated: true,
         isVerified: true,
         voterId: voterIdentity.id,

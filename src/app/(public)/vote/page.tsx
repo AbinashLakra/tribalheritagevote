@@ -76,6 +76,7 @@ function VotePageContent() {
   const [contest, setContest] = useState<{ id: string; title: string; status: string } | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isVerified, setIsVerified] = useState(false);
+  const [showPublicVotes, setShowPublicVotes] = useState<boolean>(true);
   const [voterPhone, setVoterPhone] = useState<string | null>(null);
   const [voterEmail, setVoterEmail] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -120,6 +121,7 @@ function VotePageContent() {
 
       const bData = data.data;
       setContest(bData.contest);
+      setShowPublicVotes(bData.showPublicVotes ?? true);
       setIsAuthenticated(bData.isAuthenticated);
       setIsVerified(bData.isVerified);
       setVoterPhone(bData.voterPhone);
@@ -977,7 +979,7 @@ function VotePageContent() {
                             {nom.title}
                           </h4>
                           <span className="text-[11px] font-bold text-amber-600 shrink-0">
-                            ★ {nom.vote_count} votes
+                            {showPublicVotes ? `★ ${nom.vote_count} votes` : '★ Official Entry'}
                           </span>
                         </div>
 

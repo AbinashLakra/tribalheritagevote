@@ -3,6 +3,7 @@ import { Search, MapPin, Sparkles, Filter, Video, ArrowRight, User } from 'lucid
 import { createAdminClient } from '@/lib/supabase/admin';
 import { INDIAN_STATES } from '@/lib/constants/states';
 import { ART_CATEGORIES } from '@/lib/constants/art-categories';
+import { enhanceNominationsWithBoost, extractContestSettings } from '@/lib/voting/vote-display-calculator';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,6 +24,15 @@ interface ArtistsDirectoryPageProps {
 export default async function ArtistsDirectoryPage({ searchParams }: ArtistsDirectoryPageProps) {
   const { search = '', state = '', category = '', page = '1' } = await searchParams;
   const admin = createAdminClient();
+
+  const { data: contest } = await admin
+    .from('contests')
+    .select('id, title, status, settings, leaderboard_visibility, voting_start_at, voting_end_at, reopening_reason')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const contestSettings = extractContestSettings(contest);
 
   const currentPage = Math.max(1, parseInt(page, 10) || 1);
   const pageSize = 12;
@@ -46,9 +56,13 @@ export default async function ArtistsDirectoryPage({ searchParams }: ArtistsDire
     query = query.eq('artist.state', state);
   }
 
-  const { data: nominations, count } = await query
+  const { data: rawNominations, count } = await query
     .order('vote_count', { ascending: false })
     .range(offset, offset + pageSize - 1);
+
+  const boostedNominations = enhanceNominationsWithBoost(rawNominations || [], contest);
+  boostedNominations.sort((a, b) => b.vote_count - a.vote_count);
+  const nominations = boostedNominations;
 
   const totalEntries = count || 0;
   const totalPages = Math.ceil(totalEntries / pageSize);
@@ -192,7 +206,7 @@ export default async function ArtistsDirectoryPage({ searchParams }: ArtistsDire
                 <div className="p-5 pt-0">
                   <div className="pt-3 border-t border-ivory-200 flex items-center justify-between">
                     <span className="text-xs font-semibold text-charcoal-600">
-                      {nom.vote_count} Votes
+                      {contestSettings.show_public_votes ? `${nom.vote_count} Votes` : 'Official Nomination'}
                     </span>
                     <Link
                       href={`/artists/${artistId}`}

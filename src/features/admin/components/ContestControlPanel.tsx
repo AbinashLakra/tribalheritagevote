@@ -15,6 +15,9 @@ import {
   Sparkles,
   Save,
   Radio,
+  Eye,
+  EyeOff,
+  Zap,
 } from 'lucide-react';
 import { formatDateIST } from '@/lib/utils/formatters';
 
@@ -28,6 +31,11 @@ interface ContestControlPanelProps {
     leaderboard_visibility: string;
     results_published: boolean;
     reopening_reason?: string | null;
+    settings?: {
+      show_public_votes?: boolean;
+      boost_enabled?: boolean;
+      boost_velocity_per_day?: number;
+    } | null;
   };
 }
 
@@ -50,6 +58,13 @@ export function ContestControlPanel({ contest }: ContestControlPanelProps) {
   const [votingStart, setVotingStart] = useState<string>(toDatetimeLocal(contest.voting_start_at));
   const [votingEnd, setVotingEnd] = useState<string>(toDatetimeLocal(contest.voting_end_at));
 
+  const [showPublicVotes, setShowPublicVotes] = useState<boolean>(
+    contest.settings?.show_public_votes ?? (contest.leaderboard_visibility !== 'hidden')
+  );
+  const [boostEnabled, setBoostEnabled] = useState<boolean>(
+    contest.settings?.boost_enabled ?? true
+  );
+
   const [isUpdating, setIsUpdating] = useState<boolean>(false);
   const [feedback, setFeedback] = useState<{ success: boolean; message: string } | null>(null);
 
@@ -57,6 +72,48 @@ export function ContestControlPanel({ contest }: ContestControlPanelProps) {
   const [showReopenModal, setShowReopenModal] = useState<boolean>(false);
   const [reopenReason, setReopenReason] = useState<string>('');
   const [reopenEndAt, setReopenEndAt] = useState<string>('');
+
+  const handleToggleVisibility = async (newVal: boolean) => {
+    setIsUpdating(true);
+    setFeedback(null);
+    try {
+      const res = await fetch('/api/admin/contest-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contestId: contest.id, showPublicVotes: newVal }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to update visibility');
+      setShowPublicVotes(newVal);
+      setFeedback({ success: true, message: data.message });
+      router.refresh();
+    } catch (err: unknown) {
+      setFeedback({ success: false, message: err instanceof Error ? err.message : 'Error updating visibility' });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleToggleBoost = async (newVal: boolean) => {
+    setIsUpdating(true);
+    setFeedback(null);
+    try {
+      const res = await fetch('/api/admin/contest-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contestId: contest.id, boostEnabled: newVal }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to update boost mode');
+      setBoostEnabled(newVal);
+      setFeedback({ success: true, message: data.message });
+      router.refresh();
+    } catch (err: unknown) {
+      setFeedback({ success: false, message: err instanceof Error ? err.message : 'Error updating boost mode' });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   const executeTransition = async (newState: string, extraData: { reason?: string; votingEndAt?: string } = {}) => {
     setIsUpdating(true);
@@ -351,6 +408,113 @@ export function ContestControlPanel({ contest }: ContestControlPanelProps) {
               <span>Finalize &amp; Seal Results</span>
             </button>
           )}
+        </div>
+      </div>
+
+      {/* ──────────────── PUBLIC VOTE VISIBILITY & AUDIENCE DISPLAY CONTROLS ──────────────── */}
+      <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+        <div>
+          <h3 className="text-base sm:text-lg font-extrabold text-[#0f2d59]">
+            Public Vote Visibility &amp; Audience Display Controls
+          </h3>
+          <p className="text-xs text-slate-600 mt-0.5">
+            Instantly show or hide vote counts on the public website and toggle the organic presentation layer boost.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+          {/* Public Visibility Toggle Card */}
+          <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                Public Leaderboard &amp; Votes
+              </span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                  showPublicVotes ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                }`}
+              >
+                {showPublicVotes ? '🟢 Visible to Public' : '🔒 Sealed / Hidden'}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500">
+              When hidden, voters and artists see &ldquo;Votes Sealed&rdquo; without revealing vote tallies during voting.
+            </p>
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => handleToggleVisibility(true)}
+                disabled={isUpdating || showPublicVotes}
+                className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  showPublicVotes
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>Show to Public</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleToggleVisibility(false)}
+                disabled={isUpdating || !showPublicVotes}
+                className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  !showPublicVotes
+                    ? 'bg-rose-600 text-white shadow-xs'
+                    : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <EyeOff className="w-3.5 h-3.5" />
+                <span>Hide / Seal</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Organic Boost Toggle Card */}
+          <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                Organic Display Boost
+              </span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                  boostEnabled ? 'bg-amber-100 text-amber-900' : 'bg-slate-200 text-slate-700'
+                }`}
+              >
+                {boostEnabled ? '⚡ Active (~1000/24h)' : '⚙️ Pure Real Only'}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500">
+              Generates a 100% natural, non-round presentation curve scaling with real votes. Database votes remain strictly untouched.
+            </p>
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => handleToggleBoost(true)}
+                disabled={isUpdating || boostEnabled}
+                className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  boostEnabled
+                    ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
+                    : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <Zap className="w-3.5 h-3.5 fill-current" />
+                <span>Activate Boost</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleToggleBoost(false)}
+                disabled={isUpdating || !boostEnabled}
+                className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  !boostEnabled
+                    ? 'bg-slate-800 text-white shadow-xs'
+                    : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <span>Raw Votes Only</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 

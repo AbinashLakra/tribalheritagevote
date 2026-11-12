@@ -15,6 +15,7 @@ import {
 import { createAdminClient } from '@/lib/supabase/admin';
 import { CountdownTimer } from '@/components/shared/CountdownTimer';
 import { ART_CATEGORIES } from '@/lib/constants/art-categories';
+import { enhanceNominationsWithBoost, extractContestSettings } from '@/lib/voting/vote-display-calculator';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,8 +38,9 @@ export default async function HomePage() {
     .maybeSingle();
 
   // Fetch featured approved nominations
+  const contestSettings = extractContestSettings(contest);
   const contestId = contest?.id || 'a1111111-1111-1111-1111-111111111111';
-  const { data: featuredNominations } = await admin
+  const { data: rawFeatured } = await admin
     .from('nominations')
     .select(`
       id,
@@ -50,7 +52,11 @@ export default async function HomePage() {
     .eq('contest_id', contestId)
     .eq('status', 'approved')
     .order('vote_count', { ascending: false })
-    .limit(4);
+    .limit(8);
+
+  const featuredNominations = enhanceNominationsWithBoost(rawFeatured || [], contest)
+    .sort((a, b) => b.vote_count - a.vote_count)
+    .slice(0, 4);
 
   // Contest countdown target
   const targetDate = contest?.voting_end_at || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
@@ -387,7 +393,7 @@ export default async function HomePage() {
 
                     <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
                       <span className="text-xs font-bold text-slate-700">
-                        {nom.vote_count} Votes
+                        {contestSettings.show_public_votes ? `${nom.vote_count} Votes` : 'Official Nomination'}
                       </span>
                       <Link
                         href={`/artists/${artist?.id || nom.id}`}

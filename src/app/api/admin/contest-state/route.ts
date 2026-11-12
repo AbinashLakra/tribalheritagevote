@@ -13,6 +13,9 @@ const contestUpdateSchema = z.object({
   votingStartAt: z.string().optional().nullable(),
   votingEndAt: z.string().optional().nullable(),
   reason: z.string().optional(),
+  leaderboardVisibility: z.enum(['live', 'hidden', 'delayed']).optional(),
+  showPublicVotes: z.boolean().optional(),
+  boostEnabled: z.boolean().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -74,7 +77,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { contestId, newState, votingStartAt, votingEndAt, reason } = validation.data;
+    const {
+      contestId,
+      newState,
+      votingStartAt,
+      votingEndAt,
+      reason,
+      leaderboardVisibility,
+      showPublicVotes,
+      boostEnabled,
+    } = validation.data;
 
     const admin = createAdminClient();
 
@@ -152,6 +164,26 @@ export async function POST(request: NextRequest) {
     if (votingEndAt) {
       updatePayload.voting_end_at = new Date(votingEndAt).toISOString();
       transitionMessage += `Voting end / countdown target updated to ${new Date(votingEndAt).toLocaleString('en-IN')}. `;
+    }
+
+    // 5b. Handle Public Visibility & Boost Settings Updates
+    if (leaderboardVisibility) {
+      updatePayload.leaderboard_visibility = leaderboardVisibility;
+      transitionMessage += `Leaderboard visibility set to ${leaderboardVisibility}. `;
+    }
+
+    if (typeof showPublicVotes === 'boolean' || typeof boostEnabled === 'boolean') {
+      const existingSettings = (contest.settings as Record<string, any>) || {};
+      const newSettings = {
+        ...existingSettings,
+        ...(typeof showPublicVotes === 'boolean' ? { show_public_votes: showPublicVotes } : {}),
+        ...(typeof boostEnabled === 'boolean' ? { boost_enabled: boostEnabled } : {}),
+      };
+      updatePayload.settings = newSettings;
+      if (typeof showPublicVotes === 'boolean') {
+        updatePayload.leaderboard_visibility = showPublicVotes ? 'live' : 'hidden';
+      }
+      transitionMessage += `Contest display settings updated. `;
     }
 
     // 6. Update Contest Record

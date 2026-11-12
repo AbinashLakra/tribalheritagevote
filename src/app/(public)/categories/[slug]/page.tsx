@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { ArrowLeft, Video, MapPin, ArrowRight } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getCategoryBySlug, ART_CATEGORIES } from '@/lib/constants/art-categories';
+import { enhanceNominationsWithBoost, extractContestSettings } from '@/lib/voting/vote-display-calculator';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,8 +35,17 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
 
   const admin = createAdminClient();
 
+  const { data: contest } = await admin
+    .from('contests')
+    .select('id, title, status, settings, leaderboard_visibility, voting_start_at, voting_end_at, reopening_reason')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const contestSettings = extractContestSettings(contest);
+
   // Query approved nominations in this category
-  const { data: nominations } = await admin
+  const { data: rawNominations } = await admin
     .from('nominations')
     .select(`
       id,
@@ -46,6 +56,10 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
     `)
     .eq('status', 'approved')
     .order('vote_count', { ascending: false });
+
+  const boostedNominations = enhanceNominationsWithBoost(rawNominations || [], contest);
+  boostedNominations.sort((a, b) => b.vote_count - a.vote_count);
+  const nominations = boostedNominations;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-10">
@@ -124,7 +138,7 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
                   <div className="p-5 pt-0">
                     <div className="pt-3 border-t border-ivory-200 flex items-center justify-between">
                       <span className="text-xs font-semibold text-charcoal-600">
-                        {nom.vote_count} Votes
+                        {contestSettings.show_public_votes ? `${nom.vote_count} Votes` : 'Official Nomination'}
                       </span>
                       <Link
                         href={`/artists/${artist?.id || nom.id}`}

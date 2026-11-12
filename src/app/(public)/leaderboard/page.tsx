@@ -3,6 +3,7 @@ import { Award, Trophy, MapPin, EyeOff, AlertCircle, ArrowRight } from 'lucide-r
 import { createAdminClient } from '@/lib/supabase/admin';
 import { INDIAN_STATES } from '@/lib/constants/states';
 import { ART_CATEGORIES } from '@/lib/constants/art-categories';
+import { enhanceNominationsWithBoost, extractContestSettings } from '@/lib/voting/vote-display-calculator';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,12 +26,13 @@ export default async function LeaderboardPage({ searchParams }: LeaderboardPageP
   // Fetch active contest
   const { data: contest } = await admin
     .from('contests')
-    .select('id, title, status, leaderboard_visibility, results_published')
+    .select('id, title, status, leaderboard_visibility, results_published, settings, voting_start_at, voting_end_at, reopening_reason')
     .in('status', ['open', 'paused', 'closed', 'finalized'])
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
 
+  const contestSettings = extractContestSettings(contest);
   const contestId = contest?.id || 'a1111111-1111-1111-1111-111111111111';
 
   // Call PostgreSQL RPC get_leaderboard
@@ -41,9 +43,10 @@ export default async function LeaderboardPage({ searchParams }: LeaderboardPageP
     p_offset: 0,
   });
 
-  const isVisible = (leaderboardData as { visible?: boolean })?.visible ?? true;
+  const rpcVisible = (leaderboardData as { visible?: boolean })?.visible ?? true;
+  const isVisible = rpcVisible && contestSettings.show_public_votes;
   const message = (leaderboardData as { message?: string })?.message;
-  const rawEntries = (leaderboardData as { entries?: unknown[] })?.entries || [];
+  const rawEntries = (leaderboardData as { entries?: any[] })?.entries || [];
 
   interface Entry {
     rank: number;
@@ -57,7 +60,22 @@ export default async function LeaderboardPage({ searchParams }: LeaderboardPageP
     vote_count: number;
   }
 
-  const entries = rawEntries as Entry[];
+  // Apply Organic Boost calculation to leaderboard entries
+  const normalizedEntries = (rawEntries as any[]).map((e) => ({
+    ...e,
+    id: e.nomination_id,
+    vote_count: Number(e.vote_count || 0),
+  }));
+
+  const boostedEntries = enhanceNominationsWithBoost(normalizedEntries, contest);
+  boostedEntries.sort((a, b) => b.vote_count - a.vote_count);
+
+  const entries: Entry[] = boostedEntries.map((e, idx) => ({
+    ...e,
+    rank: idx + 1,
+    vote_count: e.vote_count,
+  }));
+
   const topVote = entries[0]?.vote_count || 1;
 
   return (
