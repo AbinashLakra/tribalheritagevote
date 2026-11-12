@@ -5,3 +5,4 @@ ADD COLUMN IF NOT EXISTS settings JSONB DEFAULT '{"show_public_votes": true, "bo
 UPDATE public.contests 
 SET settings = '{"show_public_votes": true, "boost_enabled": true, "boost_velocity_per_day": 1000}'::jsonb 
 WHERE settings IS NULL;
+

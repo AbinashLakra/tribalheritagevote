@@ -839,3 +839,4 @@ export function VoteLeadingDashboard({
     </div>
   );
 }
+

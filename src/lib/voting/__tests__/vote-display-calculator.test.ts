@@ -144,3 +144,4 @@ describe('Vote Display Calculator (Organic Display Boost)', () => {
     expect(enhanced[1].displayed_vote_count).toBeGreaterThan(10);
   });
 });
+
