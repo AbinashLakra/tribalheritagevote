@@ -39,3 +39,4 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.redirect(`${origin}/vote?authError=google_signin_failed`);
 }
+
