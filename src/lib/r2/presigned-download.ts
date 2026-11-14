@@ -13,12 +13,6 @@ export async function getMediaUrl(
   expiresInSeconds: number = 7200
 ): Promise<string> {
   const cleanKey = objectKey.replace(/^\/+/, '');
-
-  if (R2_MEDIA_DOMAIN) {
-    const cleanDomain = R2_MEDIA_DOMAIN.replace(/\/+$/, '');
-    return `${cleanDomain}/${cleanKey}`;
-  }
-
-  // Return permanent streaming endpoint with range request support for iOS/Android/PC
-  return `/api/media/stream?key=${encodeURIComponent(cleanKey)}`;
+  const cleanDomain = (R2_MEDIA_DOMAIN || 'https://pub-24b13a9fc1b244bca16f253538b62c9f.r2.dev').replace(/\/+$/, '');
+  return `${cleanDomain}/${cleanKey}`;
 }

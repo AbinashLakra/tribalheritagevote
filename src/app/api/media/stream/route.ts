@@ -47,46 +47,24 @@ export async function GET(req: NextRequest) {
       return handleExternalOrLegacyUrl(cleanKey, req);
     }
 
-    // 3. PRIORITY A: Public Cloudflare R2 CDN Domain (e.g. pub-xxxx.r2.dev or custom media domain)
-    if (R2_MEDIA_DOMAIN) {
-      const cdnUrl = `${R2_MEDIA_DOMAIN.replace(/\/+$/, '')}/${cleanKey}`;
-      const res = NextResponse.redirect(cdnUrl, 307);
-      res.headers.set('Cache-Control', 'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800');
-      return res;
-    }
-
-    // 4. PRIORITY B: Direct Signed Cloudflare R2 Streaming URL (0 Vercel Origin Bandwidth)
-    const s3 = getR2Client();
-    try {
-      const command = new GetObjectCommand({
-        Bucket: R2_BUCKET_NAME,
-        Key: cleanKey,
-      });
-
-      // 24-hour direct signed Cloudflare download link
-      const directCloudflareUrl = await getSignedUrl(s3, command, {
-        expiresIn: 86400, // 24 hours validity directly from Cloudflare
-      });
-
-      const res = NextResponse.redirect(directCloudflareUrl, 307);
-      // Cache the redirect on CDN for 12 hours so subsequent hits don't even invoke Vercel!
-      res.headers.set('Cache-Control', 'public, max-age=43200, s-maxage=43200, stale-while-revalidate=86400');
-      return res;
-    } catch (signErr: any) {
-      console.warn('Failed to generate direct Cloudflare signed URL, attempting fallback:', signErr?.message);
-    }
-
-    // Fallback: Proxy directly from R2 if signing somehow fails
-    const command = new GetObjectCommand({
-      Bucket: R2_BUCKET_NAME,
-      Key: cleanKey,
-      Range: req.headers.get('range') || undefined,
-    });
-    const s3Response = await s3.send(command);
-    const webStream = (s3Response.Body as any).transformToWebStream();
-    return new NextResponse(webStream, { status: 200 });
+    // 3. ZERO VERCEL BANDWIDTH: Always redirect directly to Cloudflare R2 public CDN
+    const cdnBase = (R2_MEDIA_DOMAIN || 'https://pub-24b13a9fc1b244bca16f253538b62c9f.r2.dev').replace(/\/+$/, '');
+    const cdnUrl = `${cdnBase}/${cleanKey}`;
+    
+    const res = NextResponse.redirect(cdnUrl, 307);
+    res.headers.set(
+      'Cache-Control',
+      'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800'
+    );
+    return res;
   } catch (err: any) {
     console.error('Media stream error:', err);
+    // Even in error handler, redirect directly to Cloudflare R2 fallback instead of proxying bytes
+    const fallbackBase = 'https://pub-24b13a9fc1b244bca16f253538b62c9f.r2.dev';
+    const fallbackKey = req.nextUrl.searchParams.get('key') || '';
+    if (fallbackKey) {
+      return NextResponse.redirect(`${fallbackBase}/${encodeURIComponent(fallbackKey.replace(/^\/+/, ''))}`, 307);
+    }
     return new NextResponse(err?.message || 'Media not found', { status: 404 });
   }
 }
